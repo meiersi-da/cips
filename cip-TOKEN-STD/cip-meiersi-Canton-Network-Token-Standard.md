@@ -1,14 +1,19 @@
 <pre>
-  CIP:  CIP 0047
-  Title: Featured App Activity Markers
-  Author: Moritz Kiefer
+  CIP:  CIP XXXX
+  Layer: Daml
+  Title: Canton Network Token Standard
+  Author: Simon Meier, Matteo Limberto
   License: CC-1.0
   Status: Draft
-  Type: Tokenomics
-  Created: 2025-02-12
+  Type: Standards Track
+  Created: 2025-03-07
+  Post-History: https://lists.sync.global/g/cip-discuss/topic/110627661#msg13
 </pre>
 
+
 ## Abstract
+
+
 
 Currently, featured applications can only generate activity records
 and mint rewards as part of Canton Coin transfers. However, this
@@ -20,68 +25,89 @@ marker is equivalent to the existing app activity records created as
 part of a Canton Coin transfer recording a fixed amount of burned CC. The value of this marker
 will be determined by a new governance parameter.
 
+## Copyright
+
+This CIP is licensed under CC0-1.0: [Creative Commons CC0 1.0 Universal](https://creativecommons.org/publicdomain/zero/1.0/)
+
 ## Motivation
 
-Currently, as part of a Canton Coin transfer where the `provider`
-party is set to a featured application provider, an activity record is
-generated with the amount set to the amount of Canton Coin burned as
-part of that transfer plus the `extraFeaturedAppRewardAmount` defined
-in a given `AmuletConfig` voted on by super validators.
+Define a standard interface for Canton Network tokens so that wallets and apps
+can use and build on them in a uniform way.
 
-This activity record can then be used to mint Canton Coin, thus rewarding
-application providers for Canton Coin transfers generated as part of
-their application.
-
-While this works well to reward applications that inherently transfer
-Canton Coin, it does not reward applications that do not involve
-Canton Coin. It is possible to mitigate that by introducing artificial
-Canton Coin transfers into an application but that adds complexity
-during application development (even more so for transactions
-requiring external signing) and increases the size of the transaction
-and traffic costs without a clear benefit.
-
-Featured app activity markers address this by allowing applications to
-generate activity records and mint featured application rewards
-without the need to initiate Canton Coin Transfers.
 
 ## Specification
 
+### Context
+
+- three kinds of apps
+- free of payment vs. DvP
+- tradfi requirements ?
+- privacy:
+- there is typically a requirement for disclosed data
+
+
 ### Overview
 
-Featured applications get the ability to create
-`FeaturedAppActivityMarker` contracts, which have a constant value
-determined by the newly introduced `featuredAppActivityMarkerAmount` parameter
-that is set through governance votes by the super validators (the
-default until changed is $1 USD). Tho governance process for changing
-this reuses the existing vote process to change `AmuletConfig` (also
-used for `extraFeaturedAppRewardAmount`) where one SV proposes a
-change and a 2/3 majority needs to accept.
+- focus on the core workflows that make TradFi tick: FoP and DvP
 
-Automation run by the super validators converts these
-`FeaturedAppActivityMarker` contracts into the existing
-`AppRewardCoupon` contracts for the current open mining round with the
-US Dollar amount determined by `featuredAppActivityMarkerAmount` and converted
-to Canton Coin based on the Canton Coin conversion rate associated
-with that mining round.
+#### Wallet Client / Portfolio View
 
-These `AppRewardCoupon` contracts can then be minted in the same
-fashion as activity records originating from Canton Coin transfers. In
-particular, they are minted from the existing minting pool/tranche for
-application rewards.
+- wallet as the central interaction gateway
 
-One transaction can contain multiple markers for different providers
-just as one transaction can contain multiple Canton Coin
-transfers. This can be useful for composed applications like an
-exchange where both an exchange and the asset registry applications should get rewards
-for successfully settling a trade in a single, atomic DvP transaction.
+#### Free of Payment Transfers
 
-Featured application providers are expected to create featured
-application activity markers only for transactions that correspond to a
-transfer of an asset, or an equivalent transaction, which was 
-enabled by the application provider. The
-detailed fair usage policy and enforcement thereof is left up to the
-Tokenomics Committee of the Global Synchronizer Foundation (GSF).
 
+#### Delivery versus Payment (DvP) Transfers
+
+
+#### Canton Coin Implementation
+
+- implements all APIs
+- limitation: 1 min delay between prepare and submit
+
+
+#### Extensibility
+
+- metadata
+- additional interfaces
+
+
+
+
+> Featured applications get the ability to create
+> `FeaturedAppActivityMarker` contracts, which have a constant value
+> determined by the newly introduced `featuredAppActivityMarkerAmount` parameter
+> that is set through governance votes by the super validators (the
+> default until changed is $1 USD). Tho governance process for changing
+> this reuses the existing vote process to change `AmuletConfig` (also
+> used for `extraFeaturedAppRewardAmount`) where one SV proposes a
+> change and a 2/3 majority needs to accept.
+>
+> Automation run by the super validators converts these
+> `FeaturedAppActivityMarker` contracts into the existing
+> `AppRewardCoupon` contracts for the current open mining round with the
+> US Dollar amount determined by `featuredAppActivityMarkerAmount` and converted
+> to Canton Coin based on the Canton Coin conversion rate associated
+> with that mining round.
+>
+> These `AppRewardCoupon` contracts can then be minted in the same
+> fashion as activity records originating from Canton Coin transfers. In
+> particular, they are minted from the existing minting pool/tranche for
+> application rewards.
+>
+> One transaction can contain multiple markers for different providers
+> just as one transaction can contain multiple Canton Coin
+> transfers. This can be useful for composed applications like an
+> exchange where both an exchange and the asset registry applications should get rewards
+> for successfully settling a trade in a single, atomic DvP transaction.
+>
+> Featured application providers are expected to create featured
+> application activity markers only for transactions that correspond to a
+> transfer of an asset, or an equivalent transaction, which was
+> enabled by the application provider. The
+> detailed fair usage policy and enforcement thereof is left up to the
+> Tokenomics Committee of the Global Synchronizer Foundation (GSF).
+>
 ### Details
 
 A draft PR with all Daml changes is linked below in the [Reference implementation](#reference-implementation) section.
@@ -105,6 +131,11 @@ To allow applications to decouple themselves from the internal amulet models and
 ## Rationale
 
 ### Alternatives considered
+
+- ERC20 allowance: implement via full transfer and on-ledger record of debt of repayment, typically secured via decentralized party
+- delegated transfers
+  - plan to change Canton Coin so that it's txs do not depend on `getTime`
+- authentication: simple for now, extend to more in-depth models later
 
 #### Artificial Canton Coin transfers
 
@@ -138,6 +169,11 @@ traffic costs paid for a transaction. That is a viable long-term option.
 However, this would be a significantly more complex change, which would delay this feature. We propose to implement the simpler option first.
 
 ## Backwards compatiblity
+
+Canton Coin implements
+
+The Canton Token standard APIs are new APIs
+
 
 The app reward activity markers are a new API and are purely
 additive. All existing APIs continue to function as is. In particular,
