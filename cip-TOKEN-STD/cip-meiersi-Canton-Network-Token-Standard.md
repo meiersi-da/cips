@@ -75,32 +75,58 @@ For this purpose it supports:
 - **privacy**: asset holdings and transfers are by shared on a need-to-know basis
 - **control**: registries have full control over the workflows governing asset holdings and transfers
 
+#### UTXO Access Management
+
+Canton manages the state of its ledger using an extended Unspent-Transaction-Output (UTXO) model.
+There is a one-to-one correspondence between Daml contracts and UTXOs.
+Canton's UTXOs are annotated with their stakeholders and are only distributed to the nodes hosting these stakeholders.
+
+Constructing transactions requires access to all UTXOs referenced or consumed by the transaction.
+Clients provide this access by retrieving the UTXOs known to their parties from their validator node and
+the UTXOs known to an app provider using API calls to app-specific services.
+
+The standard assumes that UTXO access is provided via:
+
+- **wallet access to user parties**:
+  wallets have access to the Ledger API of the validator node hosting the parties of their users
+  and use that to retrieve all UTXOs known to these parties.
+- **registry off-ledger APIs**:
+  registries serve UTXOs private to the registry operator via standardized HTTP APIs specified using OpenAPI.
 
 
-### Functionality
+#### Free of Payment (FOP) Transfer Workflows
 
-We provide an overview of these three functionalities in the following sections.
+The FOP workflow used by the standard is a straightforward linear flow:
+
+- investor specifies transfer recipient, amount, input holdings, deadline for execution
+- wallet client retrieves required UTXOs from registry
+- wallet client initiates transfer
+- depending on registry
+  - specified amount of holdings gets transferred to the recipient immediately
+  - transfer instruction gets created
+-
+
+Considerations:
+
+- opt-in for receiving token
+- abortion of transfer instruction
 
 
-- three kinds of apps
-- free of payment vs. DvP
-- tradfi requirements ?
-- privacy:
-- there is typically a requirement for disclosed data
+
+#### Delivery versus Payment (DVP) Transfer Workflows
 
 
-### Overview
 
-- focus on the core workflows that make TradFi tick: FoP and DvP
+
 
 #### Wallet Client / Portfolio View
 
+
+
 - wallet as the central interaction gateway
 
-#### Free of Payment Transfers
 
 
-#### Delivery versus Payment (DvP) Transfers
 
 
 #### Canton Coin Implementation
