@@ -31,13 +31,56 @@ This CIP is licensed under CC0-1.0: [Creative Commons CC0 1.0 Universal](https:/
 
 ## Motivation
 
-Define a standard interface for Canton Network tokens so that wallets and apps
-can use and build on them in a uniform way.
+Define standard APIs for Canton Network tokens so that wallets and apps can use
+them and build on them in a uniform way.
 
 
 ## Specification
 
-### Context
+### Overview
+
+This standard is concerned with three kinds of applications:
+
+- **asset registries**:
+  which are used by registrars to manage the ownership records of Canton Network
+  tokens. For example, Amulet as the app backing Canton Coin, or Digital Asset’s
+  tokenization utility backing USYC on Canton.
+
+- **wallets and custody solutions**:
+  which are used by investors to manage their Canton Network token holdings
+  across multiple asset registries. For example, DFNS, Copper, HydraX, or future
+  retail oriented wallets.
+
+- **apps**: any other services which interact with tokenized assets on-chain.
+
+The standard enables building wallets that provide the following functionality to investors:
+
+1. **Portfolio view**:
+   Display current and past holdings of all their Canton Network assets together
+   with the total supply of the assets as reported by their registries.
+2. **Free of Payment (FOP) Transfers**:
+   Initiate bilateral, free-of-payment transfers of their holdings; and monitor
+   their progress.
+3. **Delivery versus Payment (DVP) Transfers**:
+   Review, approve and reject asset transfers requested by apps to atomically settle on-ledger DVP obligations.
+
+The support for DVP transfers enables building apps that coordinate asset
+transfers as part of their workflows: e.g., margin management, OTC trading,
+(decentralized) exchanges, or apps that accept Canton Network tokens as a means
+of payment.
+
+The standard is designed to enable the tokenization of Real-World Assets (RWAs) on Canton Network.
+For this purpose it supports:
+
+- **privacy**: asset holdings and transfers are by shared on a need-to-know basis
+- **control**: registries have full control over the workflows governing asset holdings and transfers
+
+
+
+### Functionality
+
+We provide an overview of these three functionalities in the following sections.
+
 
 - three kinds of apps
 - free of payment vs. DvP
