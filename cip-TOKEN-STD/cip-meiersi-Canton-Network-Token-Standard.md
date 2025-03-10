@@ -13,17 +13,18 @@
 
 ## Abstract
 
+TODO
 
 
-Currently, featured applications can only generate activity records
-and mint rewards as part of Canton Coin transfers. However, this
-excludes a significant amount of applications that do not inherently involve Canton Coin.
-To address this problem and allow rewarding applications that do not
-involve Canton Coin, we propose introducing the ability for featured applications to create
-app activity markers without transfering Canton Coin. An app activity
-marker is equivalent to the existing app activity records created as
-part of a Canton Coin transfer recording a fixed amount of burned CC. The value of this marker
-will be determined by a new governance parameter.
+> Currently, featured applications can only generate activity records
+> and mint rewards as part of Canton Coin transfers. However, this
+> excludes a significant amount of applications that do not inherently involve Canton Coin.
+> To address this problem and allow rewarding applications that do not
+> involve Canton Coin, we propose introducing the ability for featured applications to create
+> app activity markers without transfering Canton Coin. An app activity
+> marker is equivalent to the existing app activity records created as
+> part of a Canton Coin transfer recording a fixed amount of burned CC. The value of this marker
+> will be determined by a new governance parameter.
 
 ## Copyright
 
@@ -42,7 +43,7 @@ them and build on them in a uniform way.
 This standard is concerned with three kinds of applications:
 
 - **asset registries**:
-  which are used by registrars to manage the ownership records of Canton Network
+  which are used to manage the ownership records of Canton Network
   tokens. For example, Amulet as the app backing Canton Coin, or Digital Asset’s
   tokenization utility backing USYC on Canton.
 
@@ -72,12 +73,16 @@ of payment.
 The standard is designed to enable the tokenization of Real-World Assets (RWAs) on Canton Network.
 For this purpose it supports:
 
-- **privacy**: asset holdings and transfers are by shared on a need-to-know basis
+- **privacy**: information about asset holdings and transfers is shared on a need-to-know basis
 - **control**: registries have full control over the workflows governing asset holdings and transfers
+
+In the following, we provide a more detailed overview over the different
+functionatlities supported by the standard.
+
 
 #### UTXO Access Management
 
-Canton manages the state of its ledger using an extended Unspent-Transaction-Output (UTXO) model.
+Note that Canton manages the state of its ledger using an extended Unspent-Transaction-Output (UTXO) model.
 There is a one-to-one correspondence between Daml contracts and UTXOs.
 Canton's UTXOs are annotated with their stakeholders and are only distributed to the nodes hosting these stakeholders.
 
@@ -85,57 +90,125 @@ Constructing transactions requires access to all UTXOs referenced or consumed by
 Clients provide this access by retrieving the UTXOs known to their parties from their validator node and
 the UTXOs known to an app provider using API calls to app-specific services.
 
-The standard assumes that UTXO access is provided via:
+The standard proposes to provide UTXO access for constructing transactions involving tokens as follows:
 
 - **wallet access to user parties**:
-  wallets have access to the Ledger API of the validator node hosting the parties of their users
+  wallets are assumed to have access to the Ledger API of the validator node hosting the parties of their users
   and use that to retrieve all UTXOs known to these parties.
 - **registry off-ledger APIs**:
-  registries serve UTXOs private to the registry operator via standardized HTTP APIs specified using OpenAPI.
+  registries serve UTXOs private to the registry via standardized HTTP APIs specified using OpenAPI as part of the standard.
 
 
-#### Free of Payment (FOP) Transfer Workflows
+#### Free of Payment (FOP) Transfer Workflow
 
-The FOP workflow used by the standard is a straightforward linear flow:
+The FOP transfer workflow supported by the standard enables an investor to send a
+specific amount of their asset holdings to another investor, which is considered
+the recipient of the transfer.
 
-- investor specifies transfer recipient, amount, input holdings, deadline for execution
-- wallet client retrieves required UTXOs from registry
-- wallet client initiates transfer
-- depending on registry
-  - specified amount of holdings gets transferred to the recipient immediately
-  - transfer instruction gets created
--
+The transfer is always initiated by the sender using their wallet to submit a
+Daml transaction that specifies the instruction to the registry to execute the
+transfer within a given deadline. Depending on the registry, this instruction
+gets completed immediately as part of this one Daml transaction; or once
+further registry-specific steps have happened as part of additional Daml transactions.
 
-Considerations:
-
-- opt-in for receiving token
-- abortion of transfer instruction
-
+The latter option is provided for registries that require additional approvals
+to be provided before a transfer can be executed; or registries whose authoritative
+ledger is maintained outside of Canton. Registries are allowed to abort a
+transfer instruction in case the transfer is not possible.
 
 
 #### Delivery versus Payment (DVP) Transfer Workflows
 
+The DVP transfer workflows enable multiple asset transfers to be executed as
+part of a single Daml transaction in an all-or-nothing fashion: either all
+transfers happen or none of them happens.
 
+For this purpose, the registries allow investors to use their wallet to allocate
+some of their asset holdings to a settlement for a fixed amount of time. Once
+all allocations required for a settlement are present, the settlement executor
+submits the one Daml transaction that triggers all of the transfers.
 
+More concretely, the standard specifies APIs that enable apps and wallets to
+support the workflows along the following lines:
+
+1. The user uses the app to get to a point where they are required to deliver
+   some of their assets as part of a settlement. For example, they made a
+   matched bid on an exchange app or they requested to purchase a license in
+   exchange for some of their asset holdings.
+2. The user sees the requested asset allocation for that settlement in their wallet
+   and use the wallet to create the Daml transaction that instructs the registry
+   to create a corresponding allocation.
+3. The app's backend observes the creation of the allocation on its validator node.
+   It checks whether all allocations for the settlement have been created, and if yes,
+   then the app backend submits the transaction that completes the settlement, which
+   includes the execution of all transfers of the allocated assets.
+
+All settlements specify a deadline, and allocations are only valid until that deadline.
+Thus the asset holdings are only locked to an allocation until that deadline, and
+become available again to their owner immediately thereafter.
+
+It is up to the apps to decide how to deal with settlements that fail to complete within
+their deadline. They may just retry them, or they may also implement punitive actions
+for the trading parties that failed to allocate their assets within time.
+
+Analogously to transfer instructions, asset registries are allowed to use multi-step
+workflows to process an allocation instruction into an actual allocation. They can
+use that for example to check internal risk systems or to earmark the allocated funds
+in an authoriative ledger maintained outside of Canton.
 
 
 #### Wallet Client / Portfolio View
 
+As one can see from the sections above, a user's wallet serves a central role in
+the transfer workflows. The user is expected to configure their wallet client
+such that it can get real-time access to their asset holdings and in-progress
+transfers using the Ledger API of a validator node hosting the user's Daml parties.
+The wallet client can use this access to populate a portfolio view of all of the
+user's assets and the in-progress workflows on them.
 
+The wallet client can also use that Ledger API access to prepare Daml transactions
+that match a user's desired action: e.g., creating a FOP transfer instruction.
+It is the user's choice whether to sign these transactions off-ledger or have them
+be signed by their validator node. Registries should aim to allow for up to 24 hours
+between the preparation of such a transaction and their submission to the network.
 
-- wallet as the central interaction gateway
+The standard further defines an interface that allows registries to communicate
+an HTTP endpoint to wallet clients from which the wallet client can retrieve
+registry-wide information about a token, i.e., its name, total supply, token
+symbol, and an optional URL at which a registry-specific UI is available.
 
+The URL for the registry-specific UI could for example be used for the user
+to ask for the redemption of a wrapped token to a specific address on the
+original chain/ledger. Providing this URL allows universal wallet clients
+to handle all steps of common workflows, while allowing registries to
+implement custom workflows where required.
 
+Furthermore, registries that do not use Canton as the authoritative ledger
+might decide to not represent holdings on Canton. This is still valuable,
+as these assets can be used in DVP workflows like any other asset.
+The wallet clients would show real-time information about all in-progress transfers.
+Instead of showing the holdings they would though show a redirect to the registries
+own UI for querying the holding balance.
 
+The standard does not define an interface to query the holdings of such registries
+from a Canton wallet client, as that would require standardizing how to authenticate
+such a call.
 
 
 #### Canton Coin Implementation
 
-- implements all APIs
-- limitation: 1 min delay between prepare and submit
+Canton Coin (CC) implements all APIs of the standard in an efficient manner.
+FOP transfers are completed as part of the single Daml transaction instructing them.
+Likewise, DVP allocations are created within a single Daml transaction instructing them.
+
+CC is standards compliant except for the limitation that it only supports a
+1 minute delay between preparing a transaction and submitting it to the network.
+This is in contrast to the 24h targeted by the standard.
 
 
 #### Extensibility
+
+
 
 - metadata
 - additional interfaces
