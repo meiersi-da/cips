@@ -2,7 +2,7 @@
   CIP:  CIP XXXX
   Layer: Daml
   Title: Canton Network Token Standard
-  Author: Simon Meier, Matteo Limberto
+  Author: Simon Meier, Matteo Limberto, Moritz Kiefer
   License: CC-1.0
   Status: Draft
   Type: Standards Track
@@ -172,6 +172,8 @@ It is the user's choice whether to sign these transactions off-ledger or have th
 be signed by their validator node. Registries should aim to allow for up to 24 hours
 between the preparation of such a transaction and their submission to the network.
 
+##### Registry Specific Data and UIs
+
 The standard further defines an interface that allows registries to communicate
 an HTTP endpoint to wallet clients from which the wallet client can retrieve
 registry-wide information about a token, i.e., its name, total supply, token
@@ -205,70 +207,126 @@ CC is standards compliant except for the limitation that it only supports a
 1 minute delay between preparing a transaction and submitting it to the network.
 This is in contrast to the 24h targeted by the standard.
 
-
-#### Extensibility
-
+- TODO: holding fees limitation on allocations and portfolio view
 
 
-- metadata
-- additional interfaces
+#### Metadata
+
+The standard employs metadata records to enable transporting additional data as
+part of the standardized workflows. These metadata records are text-based
+key-value maps. Concretely, they are present on
+
+- choice arguments: for the caller to provide extra context information,
+  e.g., the reason for withdrawing an allocation
+- choice results: for the implementation to provide extra information about choice execution,
+  e.g., the fees charged
+- interface views: for the implementation to provide extra information about the contract,
+  e.g., an associated account-id
+- data records: to associate extra information throughout workflow with that data record
+  e.g., an off-ledger correlation id for the trade that is being settled
+
+App implementors, standard proposals, and standards are free to define metadata
+keys provided they prefix them with a DNS hostname that uniquely identifies the
+organization defining the key, thereby avoiding clashes between keys from
+different organizations.
+
+For example, keys defined as part of [splice](https://github.com/hyperledger-labs/splice) are prefixed with
+`splice.lfdecentralizedtrust.org/`.
+
+This approach enables new metadata keys to be introduced both in a top-down fashion
+by defining their meaning as part of new CIPs, as well as in a bottom-up fashion
+by keys being defined ad-hoc and adopted more widely purely based on their usefulness.
 
 
-
-
-> Featured applications get the ability to create
-> `FeaturedAppActivityMarker` contracts, which have a constant value
-> determined by the newly introduced `featuredAppActivityMarkerAmount` parameter
-> that is set through governance votes by the super validators (the
-> default until changed is $1 USD). Tho governance process for changing
-> this reuses the existing vote process to change `AmuletConfig` (also
-> used for `extraFeaturedAppRewardAmount`) where one SV proposes a
-> change and a 2/3 majority needs to accept.
->
-> Automation run by the super validators converts these
-> `FeaturedAppActivityMarker` contracts into the existing
-> `AppRewardCoupon` contracts for the current open mining round with the
-> US Dollar amount determined by `featuredAppActivityMarkerAmount` and converted
-> to Canton Coin based on the Canton Coin conversion rate associated
-> with that mining round.
->
-> These `AppRewardCoupon` contracts can then be minted in the same
-> fashion as activity records originating from Canton Coin transfers. In
-> particular, they are minted from the existing minting pool/tranche for
-> application rewards.
->
-> One transaction can contain multiple markers for different providers
-> just as one transaction can contain multiple Canton Coin
-> transfers. This can be useful for composed applications like an
-> exchange where both an exchange and the asset registry applications should get rewards
-> for successfully settling a trade in a single, atomic DvP transaction.
->
-> Featured application providers are expected to create featured
-> application activity markers only for transactions that correspond to a
-> transfer of an asset, or an equivalent transaction, which was
-> enabled by the application provider. The
-> detailed fair usage policy and enforcement thereof is left up to the
-> Tokenomics Committee of the Global Synchronizer Foundation (GSF).
->
 ### Details
 
-A draft PR with all Daml changes is linked below in the [Reference implementation](#reference-implementation) section.
+The standard defines six APIs. Each consists of an on-ledger Daml API and
+optionally an off-ledger HTTP API. The six APIs and their purpose are:
 
-#### Core Daml Model
+- token metadata API: serve symbol name, total supply, URL for registry-specific UI, other metadata
+- holdings API: populate portfolio view
+- transfer instruction API: initiate and monitor FOP transfers
+- allocation API: allocate assets to execute DVP transfers
+- allocation request API: uniform way for apps to request allocations
+- allocation instruction API: uniform way for wallets to create allocations
 
-- A new template `FeaturedAppActivityMarker` is added that stores the provider party.
-- Add a choice `FeaturedAppRight_CreateActivityMarker` on the existing `FeaturedAppRight` Daml template to create a `FeaturedAppActivityMarker`.
-- Add a choice `AmuletRules_ConvertFeaturedAppActivityMarkers` that
-  allows the SVs to convert `FeaturedAppActivityMarker` contracts into
-  `AppRewardCoupon` contracts.
+A draft PR with all Daml and OpenAPI definitions for all six APIs is linked
+below in the [Reference implementation](#reference-implementation) section. Daml
+APIs are specified using Daml interfaces and HTTP APIs are specified using
+OpenAPI.
 
-#### External Daml API
+The following diagram provides an overview of the interactions enabled by these
+APIs.
 
-To allow applications to decouple themselves from the internal amulet models and reduce the impact of upgrades to those, an API based on [Daml interfaces](https://docs.daml.com/daml/reference/interfaces.html) is provided consisting of:
+![API interaction diagram](images/api-diagram.png)
 
-- An interface `Splice.Api.FeaturedAppRightV1.FeaturedAppRight` implemented by the existing `FeaturedAppRight` template.
-- A choice `FeaturedAppRight_CreateActivityMarker` on that interface to create a marker contract.
-- An interface `Splice.Api.FeaturedAppRightV1.FeaturedAppActivityMarker` implemented by the newly introduced `FeaturedAppActivityMarker` template.
+
+#### Implementation Requirements
+
+The code in the [Reference implementation](#reference-implementation) provides
+the exact definitions of the APIs together with inline comments specifying the
+exact contracts between API clients and implementors.
+
+Asset registries can in principle freely choose which of the five APIs
+concerning them they want to implement. However, the should implement all five
+of them to maximize the utility of their tokens. The exception are asset
+registries whose authoritative holdings records are not maintained on Canton.
+They may decide to not implement the "holdings API" to avoid stale holding
+records on Canton.
+
+Wallets and custody solutions should aim to make use of all six APIs to provide
+a uniform UX across all Canton Network tokens. They should query a registry's
+metadata to figure out which APIs it supports and adjust their UI accordingly.
+
+Apps may use the "allocation API" to orchestrate asset transfers as part of
+their own workflows. They may also implement the "allocation request API"
+to integrate with wallets in a uniform way.
+
+
+#### Transaction History
+
+The standard aims to enable wallets to provide a transaction history view that explains
+all changes to a users' portfolio view and the view of in-progress transfers.
+
+The standard APIs thus define choices for all actions taken by registries,
+wallets, or apps on user-visible contracts that implement the `Holding`,
+`TransferInstruction`, `AllocationInstruction`, `AllocationRequest`, or
+`Allocation` interface. Thereby enabling wallets to parse the transaction history
+in an implementation-agnostic way using an interface filter to subscribe
+to the transaction tree stream served on the Ledger API of the validator node
+hosting the user's Daml parties.
+
+
+#### Canton Coin Metadata
+
+**TODO:** consider whether it wouldn't be better to just not annotate the values at all
+and consider the holding fees a limiation of the Canton Coin model, which we aim to remove.
+
+Canton Coin holdings are annotated with the following two optional metadata values:
+- `splice.lfdecentralizedtrust.org/created-in-round`: the number of the round in which this Canton Coin holding was created
+- `splice.lfdecentralizedtrust.org/rate-per-round`: the holding fee rate in Canton Coin per round that will be charged on this Canton Coin holding
+
+These values are optional, as the Canton Coin implementation might remove the need
+for charging holding fees in the future; and wallets should thus not assume holding
+fees to always be charged.
+
+
+### Authentication of Off-Ledger APIs
+
+CN token metadata standard:
+assumes list of instruments and their total supply is public ⇒ no authentication required
+CN holdings standard:
+fully authenticated as it reads from the users validator node
+CN transfer instruction standard:
+anybody is allowed to fetch the context for initiating a transfer ⇒ no authentication required
+CN allocation standard:
+URL’s include contract-id of allocation, which is hard to guess and time limited
+⇒ no authentication required
+CN allocation request standard:
+fully authenticated as it reads from the users validator node
+CN allocation instruction standard:
+anybody is allowed to fetch the context for instructing an allocation ⇒ no authentication required
+
 
 ## Rationale
 
@@ -278,6 +336,21 @@ To allow applications to decouple themselves from the internal amulet models and
 - delegated transfers
   - plan to change Canton Coin so that it's txs do not depend on `getTime`
 - authentication: simple for now, extend to more in-depth models later
+
+- future: publish non-user specific URL via party metadata on Canton Name Service
+“cn-token-metadata.standard.sync.global/registryUrl -> https://registry.acme.com/api/cn-token-registry/”
+
+- reading/shipping all data on-ledger
+
+
+
+### Canton Coin Limitations
+
+proper solution:
+- replace holding fees with expiry
+- native inequalities on Canton protocol
+- switch from round contracts to issue-based on ledger-effective time of contracts
+
 
 #### Artificial Canton Coin transfers
 
