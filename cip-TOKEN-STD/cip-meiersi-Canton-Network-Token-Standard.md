@@ -399,14 +399,17 @@ token standard.
 
 ## Reference implementation
 
-TODO: update reference
+A reference implementation of the Daml interfaces and the OpenAPI specifications
+can be found in the `token-standard/` directory in the `splice` repository on the
+[`canton-3.3` branch](https://github.com/hyperledger-labs/splice/tree/canton-3.3/token-standard#readme).
+The same branch also contains the `Amulet` implementation of the token standard APIs.
 
-A reference implementation of the Daml changes can be found in the [decentralized-canton-sync repository](https://github.com/digital-asset/decentralized-canton-sync/tree/cocreature/featured-app-activitymarkers).
 
 ## Copyright
 
 This CIP is licensed under CC-1.0.
 
+
 ## Changelog
 
-2025-02-12 - Intial Draft
+2025-03-11 - Intial Draft
