@@ -326,15 +326,39 @@ for the rationale.
 
 ### Alternatives considered
 
-- ERC20 allowance: implement via full transfer and on-ledger record of debt of repayment, typically secured via decentralized party
-- delegated transfers
-  - plan to change Canton Coin so that it's txs do not depend on `getTime`
-- authentication: simple for now, extend to more in-depth models later
-
 - future: publish non-user specific URL via party metadata on Canton Name Service
 “cn-token-metadata.standard.sync.global/registryUrl -> https://registry.acme.com/api/cn-token-registry/”
 
 - reading/shipping all data on-ledger
+
+
+### Relation to ERC20
+
+This standard is inspired by the [ERC20 standard](https://eips.ethereum.org/EIPS/eip-20),
+and covers all but the "allowance" feature of ERC20. More precisely:
+
+- token metadata API: covers the ERC20 functions `name()`, `symbol()`, `decimals()`, `totalSupply()`
+- holdings API: covers the functions `balanceOf(...)` via
+  on-ledger read from validator node hosting the invstors parties
+- transfer instruction API: covers the function `transfer(...)` for transactions doing a single transfer
+- allocation APIs: cover the the atomic execution of multiple `transfer(..)` function calls in the same
+  transaction. They thus provide fine-grained control over `approve(...)` and `allowance(...)` for settlement.
+- interface filters
+  ([proto](https://github.com/digital-asset/canton/blob/b7bad9cce18ae9184ee67d7acb3237589e5bccec/community/ledger-api/src/main/protobuf/com/daml/ledger/api/v2/transaction_filter.proto#L58-L76))
+  on the Ledger API for the choices from these APIs cover the ERC20 `Transfer`
+  and `Approval` events via the transaction trees stream
+  ([proto](https://github.com/digital-asset/canton/blob/b7bad9cce18ae9184ee67d7acb3237589e5bccec/community/ledger-api/src/main/protobuf/com/daml/ledger/api/v2/update_service.proto#L38-L42))
+  on validator nodes
+
+This CIP does no standardize an allowance API for two reasons:
+
+1. Allocations seem to cover the majority of use-cases for allowance.
+2. Allowances as structured in ERC20 do not work well with a UTXO model and privacy:
+   the third-party is neither privy to the UTXOs that they could spend nor would
+   they know which ones they can use without causing undue contention with
+   concurrent activity by the owner or other parties with an allowance.
+
+For this reason, the design of a UTXO-compatible allowance API is left to a future CIP.
 
 
 ### Canton Coin Limitations
