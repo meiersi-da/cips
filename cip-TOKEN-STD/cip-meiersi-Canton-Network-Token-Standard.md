@@ -309,21 +309,17 @@ to the transaction tree stream served on the Ledger API of the validator node
 hosting the user's Daml parties.
 
 
-### Authentication of Off-Ledger APIs
+#### Access to Registry Off-Ledger APIs
 
-CN token metadata standard:
-assumes list of instruments and their total supply is public ⇒ no authentication required
-CN holdings standard:
-fully authenticated as it reads from the users validator node
-CN transfer instruction standard:
-anybody is allowed to fetch the context for initiating a transfer ⇒ no authentication required
-CN allocation standard:
-URL’s include contract-id of allocation, which is hard to guess and time limited
-⇒ no authentication required
-CN allocation request standard:
-fully authenticated as it reads from the users validator node
-CN allocation instruction standard:
-anybody is allowed to fetch the context for instructing an allocation ⇒ no authentication required
+The standard expects registry apps to expose the standard's HTTP endpoints for
+accessing UTXOs to the public internet to provide maximal freedom for wallets
+and apps to fetch these.
+
+The standard does not require these requests to be authenticated, as all of them
+either access data that is expected to be public (e.g., registry metadata) or
+data that is protected by a difficult to guess identifier (e.g., the contract-id
+of an allocation). See [this section](#no-authentication-on-registry-off-ledger-apis)
+for the rationale.
 
 
 ## Rationale
@@ -339,7 +335,6 @@ anybody is allowed to fetch the context for instructing an allocation ⇒ no aut
 “cn-token-metadata.standard.sync.global/registryUrl -> https://registry.acme.com/api/cn-token-registry/”
 
 - reading/shipping all data on-ledger
-
 
 
 ### Canton Coin Limitations
@@ -385,6 +380,24 @@ Furthermore, existing wallets already do have direct integrations with
 [CC-specific FOP
 workflows](https://docs.dev.sync.global/app_dev/validator_api/index.html#external-custody-api)
 that allow for a 24h submission delay.
+
+
+### No Authentication on Registry Off-Ledger APIs
+
+We believe that most tokenization use-cases can be implemented securely with
+the protections in place in the current standard. The main protection being that
+sensitive data like an investors holdings and in-progress transfers can only be
+queried from the investors validator node. The secondary protection being that
+accessing sensitive data like the details of a transfer instruction via the
+off-ledger registry API requires knowing the corresponding contract-id, which is
+a hash over these details and high entropy data. Data that can only be guessed,
+if at all, for parties that are part of the transaction creating the
+contract-id.
+
+This CIP thus does not standardize an authentication scheme for the off-ledger APIs
+of registries to accelerate the delivery of the first version of the Canton
+Network token standard. We expect that an authentication scheme can and will be
+standardized once there is sufficient demand for it.
 
 
 ## Backwards compatiblity
