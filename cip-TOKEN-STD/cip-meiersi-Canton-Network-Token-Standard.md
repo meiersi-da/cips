@@ -199,15 +199,24 @@ such a call.
 
 #### Canton Coin Implementation
 
-Canton Coin (CC) implements all APIs of the standard in an efficient manner.
-FOP transfers are completed as part of the single Daml transaction instructing them.
-Likewise, DVP allocations are created within a single Daml transaction instructing them.
+Canton Coin (CC) implements all APIs of the standard.
+FOP transfers of CC are completed as part of the single Daml transaction instructing them.
+Likewise, DVP allocations of CC are created within a single Daml transaction instructing them.
 
-CC is standards compliant except for the limitation that it only supports a
-1 minute delay between preparing a transaction and submitting it to the network.
-This is in contrast to the 24h targeted by the standard.
+CC is standards compliant except for the following two limitations:
 
-- TODO: holding fees limitation on allocations and portfolio view
+- *shorter submission delay*: the CC implementation only supports a 1 minute
+  delay between preparing a transaction and submitting it to the network.
+  This is in contrast to the 24h delay targeted by the standard.
+- *no holding fees in portfolio view*: the amounts of CC holdings always show
+  the amount as of the round that they were created in. Wallets cannot
+  use the standardized APIs to display holding fees for CC holdings, but they
+  can read the `Amulet` contracts themselves if they desire to show holding fees.
+
+TODO: create issue for removing the two metadata keys once we're sold on not having them
+
+Both of these limitations are expected to be removed in the future, as
+explained in [Canton Coin Limitations](#canton-coin-limitations).
 
 
 #### Metadata
@@ -236,6 +245,9 @@ For example, keys defined as part of [splice](https://github.com/hyperledger-lab
 This approach enables new metadata keys to be introduced both in a top-down fashion
 by defining their meaning as part of new CIPs, as well as in a bottom-up fashion
 by keys being defined ad-hoc and adopted more widely purely based on their usefulness.
+
+TODO: define the metadata keys used by the standard
+- the URL of the registry UI
 
 
 ### Details
@@ -297,20 +309,6 @@ to the transaction tree stream served on the Ledger API of the validator node
 hosting the user's Daml parties.
 
 
-#### Canton Coin Metadata
-
-**TODO:** consider whether it wouldn't be better to just not annotate the values at all
-and consider the holding fees a limiation of the Canton Coin model, which we aim to remove.
-
-Canton Coin holdings are annotated with the following two optional metadata values:
-- `splice.lfdecentralizedtrust.org/created-in-round`: the number of the round in which this Canton Coin holding was created
-- `splice.lfdecentralizedtrust.org/rate-per-round`: the holding fee rate in Canton Coin per round that will be charged on this Canton Coin holding
-
-These values are optional, as the Canton Coin implementation might remove the need
-for charging holding fees in the future; and wallets should thus not assume holding
-fees to always be charged.
-
-
 ### Authentication of Off-Ledger APIs
 
 CN token metadata standard:
@@ -346,56 +344,62 @@ anybody is allowed to fetch the context for instructing an allocation ⇒ no aut
 
 ### Canton Coin Limitations
 
-proper solution:
-- replace holding fees with expiry
-- native inequalities on Canton protocol
-- switch from round contracts to issue-based on ledger-effective time of contracts
+As explained in [Canton Coin Implementation](#canton-coin-implementation),
+the CC implementation of this CIP will come with two limitations:
+a shorter tolerable submission delay and no generic support for wallets
+to display holding fees.
 
+There are two reasons for the shorter submission delay:
 
-#### Artificial Canton Coin transfers
+1. The `AmuletRules_Transfer` choice calls `getTime` to check that the
+   round is open for recording transfers. These calls require the prepared
+   transaction to pin the ledger time (see [Canton Time
+   Model Docs](https://docs.daml.com/concepts/time.html)), which in turn limits the
+   maximal record time up to which the transaction can be sequenced on the
+   Global Synchronizer. The maximal skew between ledger time and record time
+   allowed on the Global Synchronizer is 1 minute.
+2. The `OpenMiningRound` contracts referenced in the `AmuletRules_Transfer`
+   choice have a maximal life-time of 20 minutes, as that is the duration
+   for which a round stays open for recording activity before it moves into
+   the issuing phase. Thus any transaction referencing them becomes stale after
+   20 minuts, as it refers to an archived contract (i.e., a spent UTXO).
 
-Applications that do not use Canton Coin could still add artificial
-canton coin transfers to their application to generate application
-activity records. However, this has a few downsides over the marker
-contracts proposed in this CIP:
+The solution to both of these limitations is to restructure the activity recording
+and CC issuance such that no round contracts are required at all. This can
+be done by summarizing activity records for 10' intervals of ledger effective time
+that are far enough in the past so that no new activity records can be created
+within that interval.
 
-1. It adds additional complexity to applications to generate those
-   transfers. Creating the marker contracts only depends on the
-   `FeaturedAppRight` contract. A CC transfer requires a sender,
-   receiver, some CC funds, access to an open mining round contract
-   and access to amulet rules.
-2. It increases traffic costs: A CC transfer is more complex, not just
-   in terms of code needed to create it, but also in terms of
-   transaction size: adding a dependency on Canton Coin transfers significantly increases the size of transactions.
-3. Canton Coin transfers pin down the `OpenMiningRound` contract which
-   is only active for ~20 minutes. This can limit their usage in
-   combination with
-   [external signing](https://github.com/digital-asset/canton/blob/main/community/ledger-api/src/main/protobuf/com/daml/ledger/api/v2/interactive/README.md)
-   as it does not allow for long delays between preparing a
-   transaction and executing the signed transaction. While it is possible to circumvent this by splitting the transfer across two transactions where only the first one is externally signed, this would then require those two-step flows in all applications.
+Getting rid of round contracts also requires moving away from the round-based
+holding fees that are currently charged. We expect to replace holding fees with
+a time-based expiry of coins that depends on their amount: for example at
+an expiry rate of $1 per year, a coin contract worth $100 could be archived
+by any SV after 100 years. This solves for the problem of SVs not having to
+store dust-coins forever without the complication of time-dependent holding balances.
 
-#### Traffic-Based Activity Markers
+The CIP accepts the current CC limitations, as these two changes are non-trivial
+pieces of work that we we didn't want to put on the critical path of
+establishing a Canton Network token standard.
 
-This CIP proposes attributing a constant value to each activity marker
-contract determined by `featuredAppActivityMarkerAmount`. Another
-attractive option would be to instead make it proportional to the
-traffic costs paid for a transaction. That is a viable long-term option.
+Furthermore, existing wallets already do have direct integrations with
+[CC-specific FOP
+workflows](https://docs.dev.sync.global/app_dev/validator_api/index.html#external-custody-api)
+that allow for a 24h submission delay.
 
-However, this would be a significantly more complex change, which would delay this feature. We propose to implement the simpler option first.
 
 ## Backwards compatiblity
 
-Canton Coin implements
+The changes in this CIP are fully backwards compatible.
 
-The Canton Token standard APIs are new APIs
+Existing apps can support the APIs by adding corresponding interface
+implementations to their templates as part of a smart-contract upgrade.
+Analogously to what the reference implementation does to make CC support the
+token standard.
 
-
-The app reward activity markers are a new API and are purely
-additive. All existing APIs continue to function as is. In particular,
-Canton Coin transfers still also generate activity records that can be
-minted as rewards.
 
 ## Reference implementation
+
+TODO: update reference
 
 A reference implementation of the Daml changes can be found in the [decentralized-canton-sync repository](https://github.com/digital-asset/decentralized-canton-sync/tree/cocreature/featured-app-activitymarkers).
 
