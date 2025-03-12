@@ -241,14 +241,12 @@ organization defining the key, thereby avoiding clashes between keys from
 different organizations.
 
 For example, keys defined as part of [splice](https://github.com/hyperledger-labs/splice) are prefixed with
-`splice.lfdecentralizedtrust.org/`.
+`splice.lfdecentralizedtrust.org/`. See [Mandatory Metadata](#mandatory-metadata) for the
+metadata keys defined by this CIP.
 
 This approach enables new metadata keys to be introduced both in a top-down fashion
 by defining their meaning as part of new CIPs, as well as in a bottom-up fashion
 by keys being defined ad-hoc and adopted more widely purely based on their usefulness.
-
-TODO: define the metadata keys used by the standard
-- the URL of the registry UI
 
 
 ### Details
@@ -273,7 +271,6 @@ APIs.
 
 ![API interaction diagram](images/api-diagram.png)
 
-
 #### Implementation Requirements
 
 The code in the [Reference implementation](#reference-implementation) provides
@@ -294,6 +291,24 @@ metadata to figure out which APIs it supports and adjust their UI accordingly.
 Apps may use the "allocation API" to orchestrate asset transfers as part of
 their own workflows. They may also implement the "allocation request API"
 to integrate with wallets in a uniform way.
+
+##### Mandatory Metadata
+
+An implementation of the *token metadata API* MUST populate the following metadata
+key on the `RegistryAppInstall` interface:
+
+- `splice.lfdecentralizedtrust.org/registryUrl`: the URL on which the registry
+  serves the off-ledger HTTP APIs that it implements.
+
+Registries should also ensure that every token holder sees a corresponding
+contract that implements the `RegistryAppInstall` interface. This enables
+wallets to auto-discover the registry URL's for the holdings of their
+user by querying the contracts implementing the `RegistryAppInstall` interface
+and extracting the registry URL from their metadata.
+
+#### Synchronizer Connectivity
+
+TODO: recommend GS connectivity for registries and explain why
 
 
 #### Transaction History
@@ -329,6 +344,9 @@ for the rationale.
 - future: publish non-user specific URL via party metadata on Canton Name Service
 “cn-token-metadata.standard.sync.global/registryUrl -> https://registry.acme.com/api/cn-token-registry/”
 
+#### Resolving Registry URLs
+
+- current CNS vs. future CNS vs. local
 
 
 #### Shipping UTXOs On-Ledger
