@@ -256,12 +256,12 @@ TODO: define the metadata keys used by the standard
 The standard defines six APIs. Each consists of an on-ledger Daml API and
 optionally an off-ledger HTTP API. The six APIs and their purpose are:
 
-- token metadata API: serve symbol name, total supply, URL for registry-specific UI, other metadata
-- holdings API: populate portfolio view
-- transfer instruction API: initiate and monitor FOP transfers
-- allocation API: allocate assets to execute DVP transfers
-- allocation request API: uniform way for apps to request allocations
-- allocation instruction API: uniform way for wallets to create allocations
+- *token metadata API*: serve symbol name, total supply, URL for registry-specific UI, other metadata
+- *holdings API*: populate portfolio view
+- *transfer instruction API*: initiate and monitor FOP transfers
+- *allocation API*: allocate assets to execute DVP transfers
+- *allocation request API*: uniform way for apps to request allocations
+- *allocation instruction API*: uniform way for wallets to create allocations
 
 A draft PR with all Daml and OpenAPI definitions for all six APIs is linked
 below in the [Reference implementation](#reference-implementation) section. Daml
@@ -329,7 +329,7 @@ for the rationale.
 - future: publish non-user specific URL via party metadata on Canton Name Service
 “cn-token-metadata.standard.sync.global/registryUrl -> https://registry.acme.com/api/cn-token-registry/”
 
-- reading/shipping all data on-ledger
+
 
 #### Shipping UTXOs On-Ledger
 
@@ -337,43 +337,29 @@ As explained in [UTXO Access Management](#utxo-access-management) the standard e
 to serve HTTP APIs that provide access to the UTXO's (i.e., Daml contracts)
 required to call choices on the standard's Daml interfaces.
 
-This data path is not required in pubchains, as they share all data publicly,
-and every client can thus be expected
+Public chains do not require this kind of access management, as they share all data publicly.
+In contrast, explicitly managing that access is a hard requirement for any ledger with privacy.
 
-Explicitly managing that access is
-a hard requirement due to Daml's privacy
+We propose to provide this access via HTTP APIs in contrast to shipping
+the data on-ledger for the following reasons:
 
+- *avoid overloading synchronizers*: all transaction commits must go through a synchronizer, which
+  is thus prone to become a bottleneck. Shipping data on-ledger would imply shipping them via
+  a synchronizer that all relevant participants are connected to, which would increase the chance
+  of it becoming a bottleneck.
+- *hide implementation details*: what UTXO's to fetch for exercising an
+  interface choice depends on the implementation of that choice. That implemententation will likely
+  change over time as part of the registry changing their workflows to address new business needs.
+  Shipping just the data on-ledger to clients would thus not be enough. One
+  would also need to ship the logic for retrieving the data on-ledger, which is challenging, in particular with respect to upgrades. Serving an HTTP endpoint from a
+  registry operated server avoids this complication.
+- *use standard technology*:
+  HTTP API are a proven and very widespread technology for providing read-access to data, and
+  thus carry low technological risk.
+  Shipping private data on-ledger to provide read-access would be a new innovation with
+  significantly higher technological risk.
 
-### Relation to ERC20
-
-This standard is inspired by the [ERC20 standard](https://eips.ethereum.org/EIPS/eip-20),
-and covers all but the "allowance" feature of ERC20. More precisely:
-
-- token metadata API: covers the ERC20 functions `name()`, `symbol()`, `decimals()`, `totalSupply()`
-- holdings API: covers the functions `balanceOf(...)` via
-  on-ledger read from validator node hosting the invstors parties
-- transfer instruction API: covers the function `transfer(...)` for transactions doing a single transfer
-- allocation APIs: cover the the atomic execution of multiple `transfer(..)` function calls in the same
-  transaction. They thus provide fine-grained control over `approve(...)` and `allowance(...)` for settlement.
-- interface filters
-  ([proto](https://github.com/digital-asset/canton/blob/b7bad9cce18ae9184ee67d7acb3237589e5bccec/community/ledger-api/src/main/protobuf/com/daml/ledger/api/v2/transaction_filter.proto#L58-L76))
-  on the Ledger API for the choices from these APIs cover the ERC20 `Transfer`
-  and `Approval` events via the transaction trees stream
-  ([proto](https://github.com/digital-asset/canton/blob/b7bad9cce18ae9184ee67d7acb3237589e5bccec/community/ledger-api/src/main/protobuf/com/daml/ledger/api/v2/update_service.proto#L38-L42))
-  on validator nodes
-
-This CIP does no standardize an allowance API for two reasons:
-
-1. Allocations seem to cover the majority of use-cases for allowance.
-2. Allowances as structured in ERC20 do not work well with a UTXO model and privacy:
-   the third-party is neither privy to the UTXOs that they could spend nor would
-   they know which ones they can use without causing undue contention with
-   concurrent activity by the owner or other parties with an allowance.
-
-For this reason, the design of a UTXO-compatible allowance API is left to a future CIP.
-
-
-### Canton Coin Limitations
+#### Canton Coin Limitations
 
 As explained in [Canton Coin Implementation](#canton-coin-implementation),
 the CC implementation of this CIP will come with two limitations:
@@ -418,7 +404,7 @@ workflows](https://docs.dev.sync.global/app_dev/validator_api/index.html#externa
 that allow for a 24h submission delay.
 
 
-### No Authentication on Registry Off-Ledger APIs
+#### No Authentication on Registry Off-Ledger APIs
 
 We believe that most tokenization use-cases can be implemented securely with
 the protections in place in the current standard. The main protection being that
@@ -434,6 +420,36 @@ This CIP thus does not standardize an authentication scheme for the off-ledger A
 of registries to accelerate the delivery of the first version of the Canton
 Network token standard. We expect that an authentication scheme can and will be
 standardized once there is sufficient demand for it.
+
+
+### Relation to ERC20
+
+This standard is inspired by the [ERC20 standard](https://eips.ethereum.org/EIPS/eip-20),
+and covers all but the "allowance" feature of ERC20. More precisely:
+
+- token metadata API: covers the ERC20 functions `name()`, `symbol()`, `decimals()`, `totalSupply()`
+- holdings API: covers the functions `balanceOf(...)` via
+  on-ledger read from validator node hosting the invstors parties
+- transfer instruction API: covers the function `transfer(...)` for transactions doing a single transfer
+- allocation APIs: cover the the atomic execution of multiple `transfer(..)` function calls in the same
+  transaction. They thus provide fine-grained control over `approve(...)` and `allowance(...)` for settlement.
+- interface filters
+  ([proto](https://github.com/digital-asset/canton/blob/b7bad9cce18ae9184ee67d7acb3237589e5bccec/community/ledger-api/src/main/protobuf/com/daml/ledger/api/v2/transaction_filter.proto#L58-L76))
+  on the Ledger API for the choices from these APIs cover the ERC20 `Transfer`
+  and `Approval` events via the transaction trees stream
+  ([proto](https://github.com/digital-asset/canton/blob/b7bad9cce18ae9184ee67d7acb3237589e5bccec/community/ledger-api/src/main/protobuf/com/daml/ledger/api/v2/update_service.proto#L38-L42))
+  on validator nodes
+
+This CIP does no standardize an allowance API for two reasons:
+
+1. Allocations seem to cover the majority of use-cases for allowance.
+2. Allowances as structured in ERC20 do not work well with a UTXO model and privacy:
+   the third-party is neither privy to the UTXOs that they could spend nor would
+   they know which ones they can use without causing undue contention with
+   concurrent activity by the owner or other parties with an allowance.
+
+For this reason, the design of a UTXO-compatible allowance API is left to a future CIP.
+
 
 
 ## Backwards compatiblity
