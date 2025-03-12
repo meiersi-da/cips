@@ -13,18 +13,17 @@
 
 ## Abstract
 
-TODO
+This CIP proposes standard APIs for Canton Network tokens so that wallets and
+apps can use them and build on them in a uniform way.
+The APIs enable three key functionalities:
+(1) wallets can serve a portfolio view with transaction history,
+(2) wallets can initiate free-of-payment transfers,
+(3) apps can orchestrate atomic delivery-vs-payment transfers as part settlement workflows.
+The APIs are designed with the needs of tokenized real world assets in mind.
+In particular, they ensure privacy for investor data and provide fine-grained control
+over transfer workflows to registries, investors, and apps.
+Canton Coin implements all APIs and thus complies with the Canton Network token standard.
 
-
-> Currently, featured applications can only generate activity records
-> and mint rewards as part of Canton Coin transfers. However, this
-> excludes a significant amount of applications that do not inherently involve Canton Coin.
-> To address this problem and allow rewarding applications that do not
-> involve Canton Coin, we propose introducing the ability for featured applications to create
-> app activity markers without transfering Canton Coin. An app activity
-> marker is equivalent to the existing app activity records created as
-> part of a Canton Coin transfer recording a fixed amount of burned CC. The value of this marker
-> will be determined by a new governance parameter.
 
 ## Copyright
 
@@ -81,6 +80,8 @@ functionatlities supported by the standard.
 
 
 #### UTXO Access Management
+
+TODO: refer to polyglot Daml whitepaper
 
 Note that Canton manages the state of its ledger using an extended Unspent-Transaction-Output (UTXO) model.
 There is a one-to-one correspondence between Daml contracts and UTXOs.
@@ -301,12 +302,11 @@ The standard aims to enable wallets to provide a transaction history view that e
 all changes to a users' portfolio view and the view of in-progress transfers.
 
 The standard APIs thus define choices for all actions taken by registries,
-wallets, or apps on user-visible contracts that implement the `Holding`,
-`TransferInstruction`, `AllocationInstruction`, `AllocationRequest`, or
-`Allocation` interface. Thereby enabling wallets to parse the transaction history
-in an implementation-agnostic way using an interface filter to subscribe
-to the transaction tree stream served on the Ledger API of the validator node
-hosting the user's Daml parties.
+wallets, or apps on user-visible contracts that implement one of the standard's
+Daml interfaces.  Thereby enabling wallets to parse the transaction history in
+an implementation-agnostic way using an interface filter to subscribe to the
+transaction tree stream served on the Ledger API of the validator node hosting
+the user's Daml parties.
 
 
 #### Access to Registry Off-Ledger APIs
@@ -330,6 +330,18 @@ for the rationale.
 “cn-token-metadata.standard.sync.global/registryUrl -> https://registry.acme.com/api/cn-token-registry/”
 
 - reading/shipping all data on-ledger
+
+#### Shipping UTXOs On-Ledger
+
+As explained in [UTXO Access Management](#utxo-access-management) the standard expects registries
+to serve HTTP APIs that provide access to the UTXO's (i.e., Daml contracts)
+required to call choices on the standard's Daml interfaces.
+
+This data path is not required in pubchains, as they share all data publicly,
+and every client can thus be expected
+
+Explicitly managing that access is
+a hard requirement due to Daml's privacy
 
 
 ### Relation to ERC20
