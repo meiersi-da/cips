@@ -271,6 +271,7 @@ APIs.
 
 ![API interaction diagram](images/api-diagram.png)
 
+
 #### Implementation Requirements
 
 The code in the [Reference implementation](#reference-implementation) provides
@@ -278,7 +279,7 @@ the exact definitions of the APIs together with inline comments specifying the
 exact contracts between API clients and implementors.
 
 Asset registries can in principle freely choose which of the five APIs
-concerning them they want to implement. However, the should implement all five
+concerning them they want to implement. However, they should implement all five
 of them to maximize the utility of their tokens. The exception are asset
 registries whose authoritative holdings records are not maintained on Canton.
 They may decide to not implement the "holdings API" to avoid stale holding
@@ -291,6 +292,51 @@ metadata to figure out which APIs it supports and adjust their UI accordingly.
 Apps may use the "allocation API" to orchestrate asset transfers as part of
 their own workflows. They may also implement the "allocation request API"
 to integrate with wallets in a uniform way.
+
+##### Global Synchronizer Connectivity
+
+This CIP recommends registries to maximize the utility of their assets by
+connecting to the Global Synchronizer (GS) and supporting the execution of
+settlement workflows with their assets on the GS.  This is only a
+recommendation. They are free to use the token standard APIs on private
+synchronizers as they see fit.
+
+The reason for this is that the input contracts (i.e., UTXOs) referenced by a Daml transaction
+must all be assigned to the same synchronizer.
+Settlement transactions likely involve multiple registries, holders, and apps.
+Therefore the most likely synchronizer that all input contracts of a settlement transaction
+can be assigned to is the GS.
+Thus the benefit of connecting to the GS for settlement workflows is that this
+maximizes the chance of there being a synchronizer that can synchronize
+the Daml transactions required for the settlement to complete.
+
+
+#### Off-Ledger API Discovery and Access
+
+The standard expects registry apps to expose the standard's HTTP endpoints for
+accessing UTXOs to the public internet under a common URL prefix to provide
+maximal freedom for wallets and apps to fetch these.
+
+The standard does not require requests to these HTTP endpoints be authenticated, as all of them
+either access data that is expected to be public (e.g., registry metadata) or
+data that is protected by a difficult to guess identifier (e.g., the contract-id
+of an allocation). See [this section](#no-authentication-on-registry-off-ledger-apis)
+for the rationale.
+
+Decentralized registries (like Amulet) must serve these HTTP endpoints from each of their nodes
+using one URL prefix per node.
+Apps and wallets are free to choose any of the HTTP endpoints to query.
+The registry's Daml code must be written such that none of the nodes can influence the integrity
+of the Daml transactions built using the data from the node's HTTP response.
+Apps and wallets can thus get Byzantine-Fault-Tolerance by querying the
+off-ledger data from a random URL prefix of the decentralized registry and
+retrying in case the transaction submission fails.
+
+Apps and wallet clients can discover a (decentralized) registry's URL prefixes
+by [querying the metadata](#cns-metadata) of the CNS entry for the registry's
+`admin` party with the key `splice.lfdecentralizedtrust.org/registryUrls`, and
+parsing it as a comma-separated list of URLs.
+
 
 ##### Mandatory Metadata
 
@@ -305,6 +351,10 @@ contract that implements the `RegistryAppInstall` interface. This enables
 wallets to auto-discover the registry URL's for the holdings of their
 user by querying the contracts implementing the `RegistryAppInstall` interface
 and extracting the registry URL from their metadata.
+
+TODO: explain [("splice.lfdecentralizedtrust.org/lock-context", l.context)]
+
+
 
 #### Synchronizer Connectivity
 
@@ -324,17 +374,6 @@ transaction tree stream served on the Ledger API of the validator node hosting
 the user's Daml parties.
 
 
-#### Access to Registry Off-Ledger APIs
-
-The standard expects registry apps to expose the standard's HTTP endpoints for
-accessing UTXOs to the public internet to provide maximal freedom for wallets
-and apps to fetch these.
-
-The standard does not require these requests to be authenticated, as all of them
-either access data that is expected to be public (e.g., registry metadata) or
-data that is protected by a difficult to guess identifier (e.g., the contract-id
-of an allocation). See [this section](#no-authentication-on-registry-off-ledger-apis)
-for the rationale.
 
 
 ## Rationale
@@ -428,11 +467,8 @@ We believe that most tokenization use-cases can be implemented securely with
 the protections in place in the current standard. The main protection being that
 sensitive data like an investors holdings and in-progress transfers can only be
 queried from the investors validator node. The secondary protection being that
-accessing sensitive data like the details of a transfer instruction via the
-off-ledger registry API requires knowing the corresponding contract-id, which is
-a hash over these details and high entropy data. Data that can only be guessed,
-if at all, for parties that are part of the transaction creating the
-contract-id.
+accessing sensitive data via the off-ledger registry API requires knowing
+corresponding contract-ids, which are unguessable for third-parties.
 
 This CIP thus does not standardize an authentication scheme for the off-ledger APIs
 of registries to accelerate the delivery of the first version of the Canton
@@ -443,7 +479,7 @@ standardized once there is sufficient demand for it.
 ### Relation to ERC20
 
 This standard is inspired by the [ERC20 standard](https://eips.ethereum.org/EIPS/eip-20),
-and covers all but the "allowance" feature of ERC20. More precisely:
+and covers all features of ERC20 except unconstrained allowances. More precisely:
 
 - token metadata API: covers the ERC20 functions `name()`, `symbol()`, `decimals()`, `totalSupply()`
 - holdings API: covers the functions `balanceOf(...)` via
@@ -460,11 +496,12 @@ and covers all but the "allowance" feature of ERC20. More precisely:
 
 This CIP does no standardize an allowance API for two reasons:
 
-1. Allocations seem to cover the majority of use-cases for allowance.
+1. We expect allocations to cover the majority of use-cases for allowance.
 2. Allowances as structured in ERC20 do not work well with a UTXO model and privacy:
-   the third-party is neither privy to the UTXOs that they could spend nor would
-   they know which ones they can use without causing undue contention with
-   concurrent activity by the owner or other parties with an allowance.
+   the third-party holding the allowance is neither privy to the UTXOs that they
+   could spend nor would they know which ones they can use without causing undue
+   contention with concurrent activity by the owner or other parties with an
+   allowance.
 
 For this reason, the design of a UTXO-compatible allowance API is left to a future CIP.
 
@@ -483,9 +520,12 @@ token standard.
 ## Reference implementation
 
 A reference implementation of the Daml interfaces and the OpenAPI specifications
-can be found in the `token-standard/` directory in the `splice` repository on the
-[`canton-3.3` branch](https://github.com/hyperledger-labs/splice/tree/canton-3.3/token-standard#readme).
-The same branch also contains the `Amulet` implementation of the token standard APIs.
+can be found in the `token-standard/` directory in the `splice` repository on
+the [`canton-3.3` branch](https://github.com/hyperledger-labs/splice/tree/canton-3.3/token-standard#readme).
+The same branch also contains the `Amulet` implementation of the token standard
+APIs and a Daml script test harness for apps building on the token standard and
+for registries implementing the standard.
+
 
 
 ## Copyright
