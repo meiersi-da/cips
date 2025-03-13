@@ -214,39 +214,9 @@ CC is standards compliant except for the following two limitations:
   use the standardized APIs to display holding fees for CC holdings, but they
   can read the `Amulet` contracts themselves if they desire to show holding fees.
 
-TODO: create issue for removing the two metadata keys once we're sold on not having them
-
 Both of these limitations are expected to be removed in the future, as
 explained in [Canton Coin Limitations](#canton-coin-limitations).
 
-
-#### Metadata
-
-The standard employs metadata records to enable transporting additional data as
-part of the standardized workflows. These metadata records are text-based
-key-value maps. Concretely, they are present on
-
-- choice arguments: for the caller to provide extra context information,
-  e.g., the reason for withdrawing an allocation
-- choice results: for the implementation to provide extra information about choice execution,
-  e.g., the fees charged
-- interface views: for the implementation to provide extra information about the contract,
-  e.g., an associated account-id
-- data records: to associate extra information throughout workflow with that data record
-  e.g., an off-ledger correlation id for the trade that is being settled
-
-App implementors, standard proposals, and standards are free to define metadata
-keys provided they prefix them with a DNS hostname that uniquely identifies the
-organization defining the key, thereby avoiding clashes between keys from
-different organizations.
-
-For example, keys defined as part of [splice](https://github.com/hyperledger-labs/splice) are prefixed with
-`splice.lfdecentralizedtrust.org/`. See [Mandatory Metadata](#mandatory-metadata) for the
-metadata keys defined by this CIP.
-
-This approach enables new metadata keys to be introduced both in a top-down fashion
-by defining their meaning as part of new CIPs, as well as in a bottom-up fashion
-by keys being defined ad-hoc and adopted more widely purely based on their usefulness.
 
 
 ### Details
@@ -333,32 +303,85 @@ off-ledger data from a random URL prefix of the decentralized registry and
 retrying in case the transaction submission fails.
 
 Apps and wallet clients can discover a (decentralized) registry's URL prefixes
-by [querying the metadata](#cns-metadata) of the CNS entry for the registry's
+by [querying the metadata](#cns-entry-metadata) of the CNS entry for the registry's
 `admin` party with the key `splice.lfdecentralizedtrust.org/registryUrls`, and
 parsing it as a comma-separated list of URLs.
 
+TODO: once reviewed -- create issue to remove `RegistryAppInstall` and switch to this discovery mechanism
 
-##### Mandatory Metadata
+#### Metadata
 
-An implementation of the *token metadata API* MUST populate the following metadata
-key on the `RegistryAppInstall` interface:
+The standard employs metadata records to enable transporting additional data as
+part of the standardized workflows. These metadata records are text-based
+key-value maps. Concretely, they are present on
 
-- `splice.lfdecentralizedtrust.org/registryUrl`: the URL on which the registry
-  serves the off-ledger HTTP APIs that it implements.
+- choice arguments: for the caller to provide extra context information,
+  e.g., the reason for withdrawing an allocation
+- choice results: for the implementation to provide extra information about choice execution,
+  e.g., the fees charged
+- interface views: for the implementation to provide extra information about the contract,
+  e.g., an associated account-id
+- data records: to associate extra information throughout workflow with that data record
+  e.g., an off-ledger correlation id for the trade that is being settled
 
-Registries should also ensure that every token holder sees a corresponding
-contract that implements the `RegistryAppInstall` interface. This enables
-wallets to auto-discover the registry URL's for the holdings of their
-user by querying the contracts implementing the `RegistryAppInstall` interface
-and extracting the registry URL from their metadata.
+App implementors, standard proposals, and standards are free to define metadata
+keys provided they prefix them with a DNS subdomain that uniquely identifies the
+organization defining the key, thereby avoiding clashes between keys from
+different organizations.
 
-TODO: explain [("splice.lfdecentralizedtrust.org/lock-context", l.context)]
+This approach follows the design of
+[Kubernetes Annotations](https://kubernetes.io/docs/concepts/overview/working-with-objects/annotations/)
+and enables new metadata keys to be introduced both in a top-down fashion by
+defining their meaning as part of new CIPs, as well as in a bottom-up fashion by
+keys being defined ad-hoc and adopted more widely purely based on their
+usefulness.
+
+The metadata keys defined by this CIP are defined as part of
+[splice](https://github.com/hyperledger-labs/splice) and thus prefixed with
+`splice.lfdecentralizedtrust.org/`. Concretely, this CIP introduces the following two
+metadata keys:
+
+- `splice.lfdecentralizedtrust.org/registry-urls`: a comma-separated list of URLs of
+  the off-ledger APIs of a registry, used to [discover the off-ledger APIs of registries](#off-ledger-api-discovery-and-access)
+- `splice.lfdecentralizedtrust.org/lock-context`: used on `Holding` contracts to
+  provide a human-readable description of the context for the lock on a holding
+
+TODO: once reviewed - create issue to remove metadata keys related to holding fees
+
+TODO: once reviewed - create issue to add lock-context metadata to amulet
 
 
+##### Metadata Key Syntax
 
-#### Synchronizer Connectivity
+Metadata keys follow the same format as [Kubernetes Annotations](https://kubernetes.io/docs/concepts/overview/working-with-objects/annotations/),
+and have two segments: an
+optional prefix and name, separated by a slash (`/`). The name segment is required
+and must be 63 characters or less, beginning and ending with an alphanumeric
+character (`[a-z0-9A-Z]`) with dashes (`-`), underscores (`_`), dots (`.`), and
+alphanumerics between. The prefix is optional. If specified, the prefix must be
+a DNS subdomain: a series of DNS labels separated by dots (`.`), not longer than
+253 characters in total, followed by a slash (`/`).
 
-TODO: recommend GS connectivity for registries and explain why
+##### CNS Entry Metadata
+
+At the time of writing, entries in the
+[Canton Name Service 1.0 (CNS)](https://docs.dev.sync.global/app_dev/scan_api/scan_aggregates_api.html#looking-up-ans-entries)
+do not have native support for metadata, but they do offer a free-text `description` field.
+
+This CIP thus proposes to treat this description field as a JSON object and
+store the metadata entries as a record in a field named `meta`. The
+metadata entries associated with the `admin` party can thus be retrieved by:
+
+1. Querying any Scan URL of an SV node for the CNS entry of `/v0/ans-entries/by-party/<admin-party-id>`
+2. Parsing the JSON object in the `description` field of the response as a record.
+3. Accessing the `meta` field of that record to get the metadata entries.
+
+If any of the steps fail, then there is no metadata associated with the `admin` party.
+
+Note that [`/v0/ans-entries/by-party/`](https://docs.dev.sync.global/app_dev/scan_api/scan_openapi.html#get--v0-ans-entries-by-party-party)
+returns the CNS entry for the party with the lexicographically smallest name.
+Registry operators must make sure to store their metadata on that entry for the above procedure to work.
+The easiest way to do so is to allocate at most one CNS entry for their `admin` party.
 
 
 #### Transaction History
@@ -374,19 +397,9 @@ transaction tree stream served on the Ledger API of the validator node hosting
 the user's Daml parties.
 
 
-
-
 ## Rationale
 
-### Alternatives considered
-
-- future: publish non-user specific URL via party metadata on Canton Name Service
-“cn-token-metadata.standard.sync.global/registryUrl -> https://registry.acme.com/api/cn-token-registry/”
-
-#### Resolving Registry URLs
-
-- current CNS vs. future CNS vs. local
-
+### Alternatives Considered
 
 #### Shipping UTXOs On-Ledger
 
@@ -394,7 +407,7 @@ As explained in [UTXO Access Management](#utxo-access-management) the standard e
 to serve HTTP APIs that provide access to the UTXO's (i.e., Daml contracts)
 required to call choices on the standard's Daml interfaces.
 
-Public chains do not require this kind of access management, as they share all data publicly.
+Note that public chains do not require this kind of access management, as they share all data publicly.
 In contrast, explicitly managing that access is a hard requirement for any ledger with privacy.
 
 We propose to provide this access via HTTP APIs in contrast to shipping
@@ -476,6 +489,15 @@ Network token standard. We expect that an authentication scheme can and will be
 standardized once there is sufficient demand for it.
 
 
+#### Native Support for CNS Entry Metadata
+
+The workaround of storing metadata in the description field of CNS entries is
+a pragmatic solution to the lack of native support for metadata in CNS entries.
+We did not aim to solve this limitation in this CIP for the sake of expediency.
+We expect a future CIP to address that limitation by adding native support for
+metadata to CNS entries.
+
+
 ### Relation to ERC20
 
 This standard is inspired by the [ERC20 standard](https://eips.ethereum.org/EIPS/eip-20),
@@ -535,4 +557,4 @@ This CIP is licensed under CC-1.0.
 
 ## Changelog
 
-2025-03-11 - Intial Draft
+2025-03-13 - Intial Draft
