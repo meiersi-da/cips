@@ -17,12 +17,13 @@ This CIP proposes standard APIs for Canton Network tokens so that wallets and
 apps can use them and build on them in a uniform way.
 The APIs enable three key functionalities:
 (1) wallets can serve a portfolio view with transaction history,
-(2) wallets can initiate free-of-payment transfers,
-(3) apps can orchestrate atomic delivery-vs-payment transfers as part settlement workflows.
+(2) investors can use wallets to initiate free-of-payment and delivery-vs-payment (DVP) transfers,
+(3) apps can execute atomic DVP transfers as part settlement workflows.
 The APIs are designed with the needs of tokenized real world assets in mind.
 In particular, they ensure privacy for investor data and provide fine-grained control
 over transfer workflows to registries, investors, and apps.
-Canton Coin implements all APIs and thus complies with the Canton Network token standard.
+Canton Coin implements all APIs and complies with the Canton Network token standard
+except for [two limitations](#canton-coin-implementation) that are expected to be removed in the future.
 
 
 ## Copyright
@@ -81,9 +82,8 @@ functionalities supported by the standard.
 
 #### UTXO Access Management
 
-TODO: refer to polyglot Daml whitepaper
-
-Note that Canton manages the state of its ledger using an extended Unspent-Transaction-Output (UTXO) model.
+Note that Canton manages the state of its ledger using an extended Unspent-Transaction-Output (UTXO) model
+(see [Polyglot Canton whitepaper](https://www.canton.network/hubfs/Canton%20Network%20Files/whitepapers/Polyglot_Canton_Whitepaper_11_02_25.pdf)).
 There is a one-to-one correspondence between Daml contracts and UTXOs.
 Canton's UTXOs are annotated with their stakeholders and are only distributed to the nodes hosting these stakeholders.
 
@@ -126,7 +126,7 @@ transfers happen or none of them happens.
 
 For this purpose, the registries allow investors to use their wallet to allocate
 some of their asset holdings to a settlement for a fixed amount of time. Once
-all allocations required for a settlement are present, the settlement executor
+all allocations required for a settlement are present, the app executing the settlement
 submits the one Daml transaction that triggers all of the transfers.
 
 More concretely, the standard specifies APIs that enable apps and wallets to
@@ -134,7 +134,7 @@ support the workflows along the following lines:
 
 1. The user uses the app to get to a point where they are required to deliver
    some of their assets as part of a settlement. For example, they made a
-   matched bid on an exchange app or they requested to purchase a license in
+   matched bid on an exchange app or they requested to purchase a good in
    exchange for some of their asset holdings.
 2. The user sees the requested asset allocation for that settlement in their wallet
    and use the wallet to create the Daml transaction that instructs the registry
@@ -173,12 +173,11 @@ It is the user's choice whether to sign these transactions off-ledger or have th
 be signed by their validator node. Registries should aim to allow for up to 24 hours
 between the preparation of such a transaction and their submission to the network.
 
-##### Registry Specific Data and UIs
+##### Registry Specific UIs
 
-The standard further defines an interface that allows registries to communicate
-an HTTP endpoint to wallet clients from which the wallet client can retrieve
-registry-wide information about a token, i.e., its name, total supply, token
-symbol, and an optional URL at which a registry-specific UI is available.
+The standard allows registries to communicate the URL for a registry-specific
+UI to wallet clients. Redirecting the user to this URL serves as an escape hatch
+for serving registry specific data and driving registry-specific workflows.
 
 The URL for the registry-specific UI could for example be used for the user
 to ask for the redemption of a wrapped token to a specific address on the
@@ -201,12 +200,15 @@ such a call.
 #### Canton Coin Implementation
 
 Canton Coin (CC) implements all APIs of the standard.
-FOP transfers of CC are completed as part of the single Daml transaction instructing them.
+FOP transfers of CC require receivers to have preapproved incoming transfers from any sender.
+The are completed as part of the single Daml transaction instructing them.
 Likewise, DVP allocations of CC are created within a single Daml transaction instructing them.
+No preapproval by the receiver is required, as that authorization is expected to
+be funneled through the apps' settlement worklows.
 
 CC is standards compliant except for the following two limitations:
 
-- *shorter submission delay*: the CC implementation only supports a 1 minute
+- *short submission delay*: the CC implementation only supports a 1 minute
   delay between preparing a transaction and submitting it to the network.
   This is in contrast to the 24h delay targeted by the standard.
 - *no holding fees in portfolio view*: the amounts of CC holdings always show
@@ -216,7 +218,6 @@ CC is standards compliant except for the following two limitations:
 
 Both of these limitations are expected to be removed in the future, as
 explained in [Canton Coin Limitations](#canton-coin-limitations).
-
 
 
 ### Details
@@ -251,7 +252,7 @@ exact contracts between API clients and implementors.
 Asset registries can in principle freely choose which of the five APIs
 concerning them they want to implement. However, they should implement all five
 of them to maximize the utility of their tokens. The exception are asset
-registries whose authoritative holdings records are not maintained on Canton.
+registries whose authoritative holding records are not maintained on Canton.
 They may decide to not implement the "holdings API" to avoid stale holding
 records on Canton.
 
@@ -263,7 +264,7 @@ Apps may use the "allocation API" to orchestrate asset transfers as part of
 their own workflows. They may also implement the "allocation request API"
 to integrate with wallets in a uniform way.
 
-##### Global Synchronizer Connectivity
+##### Global Synchronizer Connectivity for Settlement Workflows
 
 This CIP recommends registries to maximize the utility of their assets by
 connecting to the Global Synchronizer (GS) and supporting the execution of
@@ -271,7 +272,7 @@ settlement workflows with their assets on the GS.  This is only a
 recommendation. They are free to use the token standard APIs on private
 synchronizers as they see fit.
 
-The reason for this is that the input contracts (i.e., UTXOs) referenced by a Daml transaction
+The reason for this recommendation is that the input contracts (i.e., UTXOs) referenced by a Daml transaction
 must all be assigned to the same synchronizer.
 Settlement transactions likely involve multiple registries, holders, and apps.
 Therefore the most likely synchronizer that all input contracts of a settlement transaction
@@ -332,7 +333,7 @@ different organizations.
 This approach follows the design of
 [Kubernetes Annotations](https://kubernetes.io/docs/concepts/overview/working-with-objects/annotations/)
 and enables new metadata keys to be introduced both in a top-down fashion by
-defining their meaning as part of new CIPs, as well as in a bottom-up fashion by
+defining their meaning as part of CIPs, as well as in a bottom-up fashion by
 keys being defined ad-hoc and adopted more widely purely based on their
 usefulness.
 
@@ -386,15 +387,21 @@ The easiest way to do so is to allocate at most one CNS entry for their `admin` 
 
 #### Transaction History
 
-The standard aims to enable wallets to provide a transaction history view that explains
-all changes to a users' portfolio view and the view of in-progress transfers.
+The standard aims to enable wallet clients to serve a transaction history view to their users that explains
+all changes to a users' portfolio view and their view of in-progress transfers.
 
-The standard APIs thus define choices for all actions taken by registries,
+The standard APIs thus define choices for common actions taken by registries,
 wallets, or apps on user-visible contracts that implement one of the standard's
 Daml interfaces.  Thereby enabling wallets to parse the transaction history in
 an implementation-agnostic way using an interface filter to subscribe to the
 transaction tree stream served on the Ledger API of the validator node hosting
 the user's Daml parties.
+
+Wallet clients should implement a fallback mechanism to display changes to the
+user-visible contracts via registry-specific choices that are not part of the
+standard. For example, they could show the JSON rendering of the choice name and
+argument, and offer an option to the user to inspect the full sub-transaction
+below the choice.
 
 
 ## Rationale
@@ -406,14 +413,15 @@ the user's Daml parties.
 As explained in [UTXO Access Management](#utxo-access-management) the standard expects registries
 to serve HTTP APIs that provide access to the UTXO's (i.e., Daml contracts)
 required to call choices on the standard's Daml interfaces.
+In contrast, public chains ship all required UTXOs on-ledger.
+They also do not require any access management for reading data, which they can
+get away with as they make all data public.
 
-Note that public chains do not require this kind of access management, as they share all data publicly.
-In contrast, explicitly managing that access is a hard requirement for any ledger with privacy.
+Explicitly managing that access is a hard requirement for any ledger with privacy.
+However, one might wonder why we don't ship the data on-ledger for the sake of simplicity.
+We propose to not do so and ship this data via off-ledger via HTTP APIs for the following reasons:
 
-We propose to provide this access via HTTP APIs in contrast to shipping
-the data on-ledger for the following reasons:
-
-- *avoid overloading synchronizers*: all transaction commits must go through a synchronizer, which
+- *network scalability*: all transaction commits must go through a synchronizer, which
   is thus prone to become a bottleneck. Shipping data on-ledger would imply shipping them via
   a synchronizer that all relevant participants are connected to, which would increase the chance
   of it becoming a bottleneck.
@@ -433,7 +441,7 @@ the data on-ledger for the following reasons:
 
 As explained in [Canton Coin Implementation](#canton-coin-implementation),
 the CC implementation of this CIP will come with two limitations:
-a shorter tolerable submission delay and no generic support for wallets
+a shorter submission delay and no generic support for wallets
 to display holding fees.
 
 There are two reasons for the shorter submission delay:
@@ -453,7 +461,7 @@ There are two reasons for the shorter submission delay:
 
 The solution to both of these limitations is to restructure the activity recording
 and CC issuance such that no round contracts are required at all. This can
-be done by summarizing activity records for 10' intervals of ledger effective time
+be done by summarizing activity records for 10 minute intervals of ledger effective time
 that are far enough in the past so that no new activity records can be created
 within that interval.
 
@@ -525,7 +533,7 @@ This CIP does no standardize an allowance API for two reasons:
    contention with concurrent activity by the owner or other parties with an
    allowance.
 
-For this reason, the design of a UTXO-compatible allowance API is left to a future CIP.
+The design of a UTXO-compatible allowance API is left to a future CIP.
 
 
 
@@ -535,8 +543,7 @@ The changes in this CIP are fully backwards compatible.
 
 Existing apps can support the APIs by adding corresponding interface
 implementations to their templates as part of a smart-contract upgrade.
-Analogously to what the reference implementation does to make CC support the
-token standard.
+Analogously to how the Amulet implementation was changed to support the APIs.
 
 
 ## Reference implementation
