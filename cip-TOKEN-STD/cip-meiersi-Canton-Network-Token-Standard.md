@@ -15,10 +15,12 @@
 
 This CIP proposes standard APIs for Canton Network tokens so that wallets and
 apps can use them and build on them in a uniform way, i.e., working only against the standard APIs without depending on the specifics of an individual asset.
-The APIs enable three key functionalities:
-(1) wallets can serve a portfolio view with transaction history,
-(2) investors can use wallets to initiate free-of-payment and delivery-vs-payment (DVP) transfers,
-(3) apps can execute atomic DVP transfers as part settlement workflows.
+The APIs enable four key functionalities:
+
+1. wallets can serve a portfolio view with transaction history
+2. investors can use wallets to initiate direct peer-to-peer transfers and delivery-vs-payment (DVP) transfers
+3. apps can execute atomic DVP transfers as part settlement workflows
+
 The APIs are designed with the needs of tokenized real world assets in mind.
 In particular, they ensure privacy for investor data and provide fine-grained control
 over transfer workflows to registries, investors, and apps.
@@ -59,9 +61,9 @@ The standard enables building wallets that provide the following functionality t
 1. **Portfolio view**:
    Display current and past holdings of all their Canton Network assets together
    with the total supply of the assets as reported by their registries.
-2. **Free of Payment (FOP) Transfers**:
-   Initiate bilateral, free-of-payment transfers of their holdings; and monitor
-   their progress.
+2. **Direct Peer-to-Peer / Free of Payment (FOP) Transfers**:
+   Initiate direct peer-to-peer transfers of their holdings and monitor their progress.
+   Note that these kind of transfers are also known as free of payment (FOP) transfers in TradFi.
 3. **Delivery versus Payment (DVP) Transfers**:
    Review, approve and reject asset transfers requested by apps to atomically settle on-ledger DVP obligations.
 
@@ -100,7 +102,7 @@ The standard proposes to provide UTXO access for constructing transactions invol
   registries serve UTXOs private to the registry via standardized HTTP APIs specified using OpenAPI as part of the standard.
 
 
-#### Free of Payment (FOP) Transfer Workflow
+#### Direct Peer-to-Peer / Free of Payment (FOP) Transfer Workflow
 
 The FOP transfer workflow supported by the standard enables an investor to send a
 specific amount of their asset holdings to another investor, which is considered
