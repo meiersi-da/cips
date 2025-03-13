@@ -46,8 +46,8 @@ This standard is concerned with three kinds of applications:
 
 - **asset registries**:
   which are used to manage the ownership records of Canton Network
-  tokens. For example, Amulet as the app backing Canton Coin, or Digital Asset’s
-  tokenization utility backing USYC on Canton.
+  tokens. For example, Amulet as the app backing Canton Coin, or Brale using
+  the Digital Asset tokenization utility app to issue USYC on Canton.
 
 - **wallets and custody solutions**:
   which are used by investors to manage their Canton Network token holdings
@@ -143,8 +143,9 @@ support the workflows along the following lines:
    to create a corresponding allocation.
 3. The app's backend observes the creation of the allocation on its validator node.
    It checks whether all allocations for the settlement have been created, and if yes,
-   then the app backend submits the transaction that completes the settlement, which
-   includes the execution of all transfers of the allocated assets.
+   then the app provider (often automated through the app backend) submits the
+   transaction that completes the settlement, which includes the execution of
+   all transfers of the allocated assets.
 
 All settlements specify a deadline, and allocations are only valid until that deadline.
 Thus the asset holdings are only locked to an allocation until that deadline, and
@@ -171,9 +172,12 @@ user's assets and the in-progress workflows on them.
 
 The wallet client can also use that Ledger API access to prepare Daml transactions
 that match a user's desired action: e.g., creating a FOP transfer instruction.
-It is the user's choice whether to sign these transactions off-ledger or have them
-be signed by their validator node. Registries should aim to allow for up to 24 hours
-between the preparation of such a transaction and their submission to the network.
+It is the user's choice whether they setup their party to use
+[external signing](https://docs.digitalasset-staging.com/canton/3.3/tutorials/external_signing_submission.html)
+or whether they delegate the signing to their validator node.
+Registries should aim to allow for up to 24 hours between the preparation of
+such a transaction and their submission to the network. This is to allow for
+external signing workflows that require human intervention.
 
 ##### Registry Specific UIs
 
@@ -190,7 +194,7 @@ implement custom workflows where required.
 Furthermore, registries that do not use Canton as the authoritative ledger
 might decide to not represent holdings on Canton. This is still valuable,
 as these assets can be used in DVP workflows like any other asset.
-The wallet clients would show real-time information about all in-progress transfers.
+The generic wallet clients would show real-time information about all in-progress transfers.
 Instead of showing the holdings they would though show a redirect to the registries
 own UI for querying the holding balance.
 
@@ -228,14 +232,14 @@ The standard defines six APIs. Each consists of an on-ledger Daml API and
 optionally an off-ledger HTTP API. The six APIs and their purpose are:
 
 - *token metadata API*: serve symbol name, total supply, URL for registry-specific UI, other metadata
-- *holdings API*: populate portfolio view
+- *holdings API*: populate portfolio view and transaction history
 - *transfer instruction API*: initiate and monitor FOP transfers
 - *allocation API*: allocate assets to execute DVP transfers
 - *allocation request API*: uniform way for apps to request allocations
 - *allocation instruction API*: uniform way for wallets to create allocations
 
 A draft PR with all Daml and OpenAPI definitions for all six APIs is linked
-below in the [Reference implementation](#reference-implementation) section. Daml
+below in the [Implementation proposal](#implementation-proposal) section. Daml
 APIs are specified using Daml interfaces and HTTP APIs are specified using
 OpenAPI.
 
@@ -247,7 +251,7 @@ APIs.
 
 #### Implementation Requirements
 
-The code in the [Reference implementation](#reference-implementation) provides
+The code in the [Implementation proposal](#implementation-proposal) provides
 the exact definitions of the APIs together with inline comments specifying the
 exact contracts between API clients and implementors.
 
@@ -296,7 +300,7 @@ data that is protected by a difficult to guess identifier (e.g., the contract-id
 of an allocation). See [this section](#no-authentication-on-registry-off-ledger-apis)
 for the rationale.
 
-Decentralized registries (like Amulet) must serve these HTTP endpoints from each of their nodes
+Decentralized registries (like Amulet) should serve these HTTP endpoints from each of their nodes
 using one URL prefix per node.
 Apps and wallets are free to choose any of the HTTP endpoints to query.
 The registry's Daml code must be written such that none of the nodes can influence the integrity
@@ -402,8 +406,8 @@ the user's Daml parties.
 Wallet clients should implement a fallback mechanism to display changes to the
 user-visible contracts via registry-specific choices that are not part of the
 standard. For example, they could show the JSON rendering of the choice name and
-argument, and offer an option to the user to inspect the full sub-transaction
-below the choice.
+argument together with the archival and creation of the affected contracts; and offer an
+option to the user to inspect the full sub-transaction below the choice.
 
 
 ## Rationale
@@ -549,9 +553,9 @@ implementations to their templates as part of a smart-contract upgrade.
 Analogously to how the Amulet implementation was changed to support the APIs.
 
 
-## Reference implementation
+## Implementation proposal
 
-A reference implementation of the Daml interfaces and the OpenAPI specifications
+A proposal for the implementation of the Daml interfaces and the OpenAPI specifications
 can be found in the `token-standard/` directory in the `splice` repository on
 the [`canton-3.3` branch](https://github.com/hyperledger-labs/splice/tree/canton-3.3/token-standard#readme).
 The same branch also contains the `Amulet` implementation of the token standard
