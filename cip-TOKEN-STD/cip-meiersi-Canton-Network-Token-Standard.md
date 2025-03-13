@@ -14,7 +14,7 @@
 ## Abstract
 
 This CIP proposes standard APIs for Canton Network tokens so that wallets and
-apps can use them and build on them in a uniform way.
+apps can use them and build on them in a uniform way, i.e., working only against the standard APIs without depending on the specifics of an individual asset.
 The APIs enable three key functionalities:
 (1) wallets can serve a portfolio view with transaction history,
 (2) investors can use wallets to initiate free-of-payment and delivery-vs-payment (DVP) transfers,
@@ -74,7 +74,7 @@ The standard is designed to enable the tokenization of Real-World Assets (RWAs) 
 For this purpose it supports:
 
 - **privacy**: information about asset holdings and transfers is shared on a need-to-know basis
-- **control**: registries have full control over the workflows governing asset holdings and transfers
+- **control**: registries have full control over the structure of the workflows governing asset holdings and transfers
 
 In the following, we provide a more detailed overview over the different
 functionalities supported by the standard.
@@ -89,7 +89,7 @@ Canton's UTXOs are annotated with their stakeholders and are only distributed to
 
 Constructing transactions requires access to all UTXOs referenced or consumed by the transaction.
 Clients provide this access by retrieving the UTXOs known to their parties from their validator node and
-the UTXOs known to an app provider using API calls to app-specific services.
+the UTXOs known to an app provider using off-ledger API calls to app-specific services.
 
 The standard proposes to provide UTXO access for constructing transactions involving tokens as follows:
 
@@ -425,6 +425,7 @@ We propose to not do so and ship this data via off-ledger via HTTP APIs for the 
   is thus prone to become a bottleneck. Shipping data on-ledger would imply shipping them via
   a synchronizer that all relevant participants are connected to, which would increase the chance
   of it becoming a bottleneck.
+- *traffic costs*: On the global synchronizer, transactions incur traffic costs. Distributing data off-ledger means instead of paying traffic costs on the global synchronizer you only pay for network egress costs for an HTTP API which is usually significantly cheaper.
 - *hide implementation details*: what UTXO's to fetch for exercising an
   interface choice depends on the implementation of that choice. That implementation will likely
   change over time as part of the registry changing their workflows to address new business needs.
