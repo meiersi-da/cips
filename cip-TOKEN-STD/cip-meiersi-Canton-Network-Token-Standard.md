@@ -76,7 +76,7 @@ For this purpose it supports:
 - **control**: registries have full control over the workflows governing asset holdings and transfers
 
 In the following, we provide a more detailed overview over the different
-functionatlities supported by the standard.
+functionalities supported by the standard.
 
 
 #### UTXO Access Management
@@ -155,7 +155,7 @@ for the trading parties that failed to allocate their assets within time.
 Analogously to transfer instructions, asset registries are allowed to use multi-step
 workflows to process an allocation instruction into an actual allocation. They can
 use that for example to check internal risk systems or to earmark the allocated funds
-in an authoriative ledger maintained outside of Canton.
+in an authoritative ledger maintained outside of Canton.
 
 
 #### Wallet Client / Portfolio View
@@ -418,7 +418,7 @@ the data on-ledger for the following reasons:
   a synchronizer that all relevant participants are connected to, which would increase the chance
   of it becoming a bottleneck.
 - *hide implementation details*: what UTXO's to fetch for exercising an
-  interface choice depends on the implementation of that choice. That implemententation will likely
+  interface choice depends on the implementation of that choice. That implementation will likely
   change over time as part of the registry changing their workflows to address new business needs.
   Shipping just the data on-ledger to clients would thus not be enough. One
   would also need to ship the logic for retrieving the data on-ledger, which is challenging, in particular with respect to upgrades. Serving an HTTP endpoint from a
@@ -449,7 +449,7 @@ There are two reasons for the shorter submission delay:
    choice have a maximal life-time of 20 minutes, as that is the duration
    for which a round stays open for recording activity before it moves into
    the issuing phase. Thus any transaction referencing them becomes stale after
-   20 minuts, as it refers to an archived contract (i.e., a spent UTXO).
+   20 minutes, as it refers to an archived contract (i.e., a spent UTXO).
 
 The solution to both of these limitations is to restructure the activity recording
 and CC issuance such that no round contracts are required at all. This can
@@ -505,7 +505,7 @@ and covers all features of ERC20 except unconstrained allowances. More precisely
 
 - token metadata API: covers the ERC20 functions `name()`, `symbol()`, `decimals()`, `totalSupply()`
 - holdings API: covers the functions `balanceOf(...)` via
-  on-ledger read from validator node hosting the invstors parties
+  on-ledger read from validator node hosting the investors parties
 - transfer instruction API: covers the function `transfer(...)` for transactions doing a single transfer
 - allocation APIs: cover the the atomic execution of multiple `transfer(..)` function calls in the same
   transaction. They thus provide fine-grained control over `approve(...)` and `allowance(...)` for settlement.
@@ -529,7 +529,7 @@ For this reason, the design of a UTXO-compatible allowance API is left to a futu
 
 
 
-## Backwards compatiblity
+## Backwards compatibility
 
 The changes in this CIP are fully backwards compatible.
 
@@ -557,4 +557,4 @@ This CIP is licensed under CC-1.0.
 
 ## Changelog
 
-2025-03-13 - Intial Draft
+2025-03-13 - Initial Draft
