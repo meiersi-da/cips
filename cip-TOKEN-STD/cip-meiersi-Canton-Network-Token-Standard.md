@@ -308,7 +308,6 @@ by [querying the metadata](#cns-entry-metadata) of the CNS entry for the registr
 `admin` party with the key `splice.lfdecentralizedtrust.org/registryUrls`, and
 parsing it as a comma-separated list of URLs.
 
-TODO: once reviewed -- create issue to remove `RegistryAppInstall` and switch to this discovery mechanism
 
 #### Total Supply and Token Metadata
 
@@ -350,10 +349,6 @@ metadata keys:
   the off-ledger APIs of a registry, used to [discover the off-ledger APIs of registries](#off-ledger-api-discovery-and-access)
 - `splice.lfdecentralizedtrust.org/lock-context`: used on `Holding` contracts to
   provide a human-readable description of the context for the lock on a holding
-
-TODO: once reviewed - create issue to remove metadata keys related to holding fees
-
-TODO: once reviewed - create issue to add lock-context metadata to amulet
 
 
 ##### Metadata Key Syntax
