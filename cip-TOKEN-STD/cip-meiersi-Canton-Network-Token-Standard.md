@@ -2,7 +2,10 @@
   CIP:  CIP XXXX
   Layer: Daml
   Title: Canton Network Token Standard
-  Author: Simon Meier, Matteo Limberto, Moritz Kiefer
+  Author:
+    Simon Meier
+    Matteo Limberto
+    Moritz Kiefer
   License: CC-1.0
   Status: Draft
   Type: Standards Track
@@ -27,10 +30,6 @@ over transfer workflows to registries, investors, and apps.
 Canton Coin implements all APIs and complies with the Canton Network token standard
 except for [two limitations](#canton-coin-implementation) that are expected to be removed in the future.
 
-
-## Copyright
-
-This CIP is licensed under CC0-1.0: [Creative Commons CC0 1.0 Universal](https://creativecommons.org/publicdomain/zero/1.0/)
 
 ## Motivation
 
@@ -566,7 +565,7 @@ for registries implementing the standard.
 
 ## Copyright
 
-This CIP is licensed under CC-1.0.
+This CIP is licensed under CC0-1.0: [Creative Commons CC0 1.0 Universal](https://creativecommons.org/publicdomain/zero/1.0/)
 
 
 ## Changelog
