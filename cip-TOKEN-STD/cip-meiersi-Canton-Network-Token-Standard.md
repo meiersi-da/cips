@@ -309,10 +309,6 @@ by [querying the metadata](#cns-entry-metadata) of the CNS entry for the registr
 parsing it as a comma-separated list of URLs.
 
 
-#### Total Supply and Token Metadata
-
-TODO: fill out, define total supply
-
 #### Generic Metadata
 
 The standard employs generic metadata records to enable transporting additional data as
@@ -402,6 +398,12 @@ standard. For example, they could show the JSON rendering of the choice name and
 argument together with the archival and creation of the affected contracts; and offer an
 option to the user to inspect the full sub-transaction below the choice.
 
+#### Total Supply
+
+Registries may optionally report the total supply of a token on the off-ledger token metadata API.
+If they decide to do so, then that total supply should be computed by summing up the `amount` field of
+all active  `Holding` contracts with a matching `instrumentId`.
+
 
 ## Motivation
 
@@ -446,6 +448,17 @@ We propose to not do so and ship this data via off-ledger via HTTP APIs for the 
   thus carry low technological risk.
   Shipping private data on-ledger to provide read-access would be a new innovation with
   significantly higher technological risk.
+
+#### On-Ledger Reporting of Total Supply
+
+Reporting the total supply of token off-ledger is done for the similar reasons as shipping UTXOs off-ledger:
+scalability, traffic costs, and hiding implementation details.
+Moreover, in contrast to public chains, shipping the total supply information on-ledger does not allow
+indepenent verification of the total supply, as the holdings from which it is computed are private.
+
+We believe this to be an OK trade-off, as the registries are already trusted to
+maintain the private holding records and can thus also be trusted to report the
+total supply correctly.
 
 #### Canton Coin Limitations
 
