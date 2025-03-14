@@ -16,28 +16,23 @@
 
 ## Abstract
 
-This CIP proposes standard APIs for Canton Network tokens so that wallets and
-apps can use them and build on them in a uniform way, i.e., working only against the standard APIs without depending on the specifics of an individual asset.
-The APIs enable four key functionalities:
-
-1. wallets can serve a portfolio view with transaction history
-2. investors can use wallets to initiate direct peer-to-peer transfers and delivery-vs-payment (DVP) transfers
-3. apps can execute atomic DVP transfers as part of settlement workflows
-
-The APIs are designed with the needs of tokenized real world assets in mind.
-In particular, they ensure privacy for investor data and provide fine-grained control
-over transfer workflows to registries, investors, and apps.
-Canton Coin implements all APIs and complies with the Canton Network token standard
-except for [two limitations](#canton-coin-implementation) that are expected to be removed in the future.
-
-
-## Motivation
-
 Define standard APIs for Canton Network tokens so that wallets and apps can use
 them and build on them in a uniform way.
 
 
 ## Specification
+
+This CIP proposes standard APIs for Canton Network tokens so that wallets and
+apps can use them and build on them in a uniform way, i.e., by working only
+against the standard APIs without depending on the specifics of an individual
+asset.
+
+This CIP also proposes that Canton Coin implements all APIs and complies with the Canton Network token standard
+except for [two limitations](#canton-coin-implementation) that are expected to be removed in the future.
+
+In the remainder of this specification, we first provide an overview of the APIs and
+the functionality they enable. We then provide technical details. A complete implementation
+proposal is available [here](#implementation-proposal).
 
 ### Overview
 
@@ -58,7 +53,7 @@ This standard is concerned with three kinds of applications:
 The standard enables building wallets that provide the following functionality to investors:
 
 1. **Portfolio view**:
-   Display current and past holdings of all their Canton Network assets together
+   Display current and past holdings as well as transaction history for all their Canton Network assets together
    with the total supply of the assets as reported by their registries.
 2. **Direct Peer-to-Peer / Free of Payment (FOP) Transfers**:
    Initiate direct peer-to-peer transfers of their holdings and monitor their progress.
@@ -71,34 +66,13 @@ transfers as part of their workflows: e.g., collateral management, OTC trading,
 (decentralized) exchanges, or apps that accept Canton Network tokens as a means
 of payment.
 
-The standard is designed to enable the tokenization of Real-World Assets (RWAs) on Canton Network.
-For this purpose it supports:
+The workflows are designed with the needs of tokenized real world assets in mind.
+For this purpose they support:
 
 - **privacy**: information about asset holdings and transfers is shared on a need-to-know basis
 - **control**: registries have full control over the structure of the workflows governing asset holdings and transfers
 
-In the following, we provide a more detailed overview over the different
-functionalities supported by the standard.
-
-
-#### UTXO Access Management
-
-Note that Canton manages the state of its ledger using an extended Unspent-Transaction-Output (UTXO) model
-(see [Polyglot Canton whitepaper](https://www.canton.network/hubfs/Canton%20Network%20Files/whitepapers/Polyglot_Canton_Whitepaper_11_02_25.pdf)).
-There is a one-to-one correspondence between Daml contracts and UTXOs.
-Canton's UTXOs are annotated with their stakeholders and are only distributed to the nodes hosting these stakeholders.
-
-Constructing transactions requires access to all UTXOs referenced or consumed by the transaction.
-Clients provide this access by retrieving the UTXOs known to their parties from their validator node and
-the UTXOs known to an app provider using off-ledger API calls to app-specific services.
-
-The standard proposes to provide UTXO access for constructing transactions involving tokens as follows:
-
-- **wallet access to user parties**:
-  wallets are assumed to have access to the Ledger API of the validator node hosting the parties of their users
-  and use that to retrieve all UTXOs known to these parties.
-- **registry off-ledger APIs**:
-  registries serve UTXOs private to the registry via standardized HTTP APIs specified using OpenAPI as part of the standard.
+In the following, we explain the two transfer workflows and the portfolio view in more detail.
 
 
 #### Direct Peer-to-Peer / Free of Payment (FOP) Transfer Workflow
@@ -162,8 +136,8 @@ in an authoritative ledger maintained outside of Canton.
 
 #### Wallet Client / Portfolio View
 
-As one can see from the sections above, a user's wallet serves a central role in
-the transfer workflows. The user is expected to configure their wallet client
+As one can see from the description of the transfer workflows above, a user's wallet serves a central role in
+these workflows. The user is expected to configure their wallet client
 such that it can get real-time access to their asset holdings and in-progress
 transfers using the Ledger API of a validator node hosting the user's Daml parties.
 The wallet client can use this access to populate a portfolio view of all of the
@@ -287,9 +261,30 @@ maximizes the chance of there being a synchronizer that can synchronize
 the Daml transactions required for the settlement to complete.
 
 
+#### UTXO Access Management
+
+Note that Canton manages the state of its ledger using an extended Unspent-Transaction-Output (UTXO) model
+(see [Polyglot Canton whitepaper](https://www.canton.network/hubfs/Canton%20Network%20Files/whitepapers/Polyglot_Canton_Whitepaper_11_02_25.pdf)).
+There is a one-to-one correspondence between Daml contracts and UTXOs.
+Canton's UTXOs are annotated with their stakeholders and are only distributed to the nodes hosting these stakeholders.
+
+Constructing transactions requires access to all UTXOs referenced or consumed by the transaction.
+Clients provide this access by retrieving the UTXOs known to their parties from their validator node and
+the UTXOs known to an app provider using off-ledger API calls to app-specific services.
+
+The standard proposes to provide UTXO access for constructing transactions involving tokens as follows:
+
+- **wallet access to user parties**:
+  wallets are assumed to have access to the Ledger API of the validator node hosting the parties of their users
+  and use that to retrieve all UTXOs known to these parties.
+- **registry off-ledger APIs**:
+  registries serve UTXOs private to the registry via standardized HTTP APIs specified using OpenAPI as part of the standard.
+
+
 #### Off-Ledger API Discovery and Access
 
-The standard expects registry apps to expose the standard's HTTP endpoints for
+As explained in the previous section,
+the standard expects registry apps to expose the standard's HTTP endpoints for
 accessing UTXOs to the public internet under a common URL prefix to provide
 maximal freedom for wallets and apps to fetch these.
 
@@ -315,9 +310,13 @@ parsing it as a comma-separated list of URLs.
 
 TODO: once reviewed -- create issue to remove `RegistryAppInstall` and switch to this discovery mechanism
 
-#### Metadata
+#### Total Supply and Token Metadata
 
-The standard employs metadata records to enable transporting additional data as
+TODO: fill out, define total supply
+
+#### Generic Metadata
+
+The standard employs generic metadata records to enable transporting additional data as
 part of the standardized workflows. These metadata records are text-based
 key-value maps. Concretely, they are present on
 
@@ -407,6 +406,16 @@ user-visible contracts via registry-specific choices that are not part of the
 standard. For example, they could show the JSON rendering of the choice name and
 argument together with the archival and creation of the affected contracts; and offer an
 option to the user to inspect the full sub-transaction below the choice.
+
+
+## Motivation
+
+As Hashnote, Brale, SocGen and others have begun to tokenize assets on the Global
+Synchronizer, and Copper and Dfns have added secure wallet support for Canton
+Coin, we have reached an ecosystem scale that needs standards that will make all
+Canton Network tokens compatible and exchangeable. All Canton Network participants
+benefit if it is easy for any Canton Network app or wallet to display and
+interact with any asset tokenized on Canton.
 
 
 ## Rationale
