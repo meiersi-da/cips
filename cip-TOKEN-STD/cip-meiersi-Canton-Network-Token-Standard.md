@@ -19,7 +19,7 @@ The APIs enable four key functionalities:
 
 1. wallets can serve a portfolio view with transaction history
 2. investors can use wallets to initiate direct peer-to-peer transfers and delivery-vs-payment (DVP) transfers
-3. apps can execute atomic DVP transfers as part settlement workflows
+3. apps can execute atomic DVP transfers as part of settlement workflows
 
 The APIs are designed with the needs of tokenized real world assets in mind.
 In particular, they ensure privacy for investor data and provide fine-grained control
@@ -47,7 +47,7 @@ This standard is concerned with three kinds of applications:
 - **asset registries**:
   which are used to manage the ownership records of Canton Network
   tokens. For example, Amulet as the app backing Canton Coin, or Brale using
-  the Digital Asset tokenization utility app to issue USYC on Canton.
+  the Digital Asset tokenization utility app to issue SBC on Canton.
 
 - **wallets and custody solutions**:
   which are used by investors to manage their Canton Network token holdings
@@ -65,10 +65,10 @@ The standard enables building wallets that provide the following functionality t
    Initiate direct peer-to-peer transfers of their holdings and monitor their progress.
    Note that these kind of transfers are also known as free of payment (FOP) transfers in TradFi.
 3. **Delivery versus Payment (DVP) Transfers**:
-   Review, approve and reject asset transfers requested by apps to atomically settle on-ledger DVP obligations.
+   Review, approve, and reject asset transfers requested by apps to atomically settle on-ledger DVP obligations.
 
 The support for DVP transfers enables building apps that coordinate asset
-transfers as part of their workflows: e.g., margin management, OTC trading,
+transfers as part of their workflows: e.g., collateral management, OTC trading,
 (decentralized) exchanges, or apps that accept Canton Network tokens as a means
 of payment.
 
@@ -105,29 +105,29 @@ The standard proposes to provide UTXO access for constructing transactions invol
 #### Direct Peer-to-Peer / Free of Payment (FOP) Transfer Workflow
 
 The FOP transfer workflow supported by the standard enables an investor to send a
-specific amount of their asset holdings to another investor, which is considered
+specific amount of their asset holdings to another investor, who is
 the recipient of the transfer.
 
 The transfer is always initiated by the sender using their wallet to submit a
-Daml transaction that specifies the instruction to the registry to execute the
-transfer within a given deadline. Depending on the registry, this instruction
-gets completed immediately as part of this one Daml transaction; or once
+Daml transaction that instructs the registry to execute the
+transfer within a given deadline. Depending on the registry, the instruction
+gets settled immediately as part of this one Daml transaction; or once
 further registry-specific steps have happened as part of additional Daml transactions.
 
 The latter option is provided for registries that require additional approvals
-to be provided before a transfer can be executed; or registries whose authoritative
+to be collected before a transfer can be executed; or registries whose authoritative
 ledger is maintained outside of Canton. Registries are allowed to abort a
-transfer instruction in case the transfer is not possible.
+transfer instruction in case the transfer cannot be executed.
 
 
 #### Delivery versus Payment (DVP) Transfer Workflows
 
 The DVP transfer workflows enable multiple asset transfers to be executed as
 part of a single Daml transaction in an all-or-nothing fashion: either all
-transfers happen or none of them happens.
+transfers settle or none of them does.
 
 For this purpose, the registries allow investors to use their wallet to allocate
-some of their asset holdings to a settlement for a fixed amount of time. Once
+some of their asset holdings to a settlement request for a fixed amount of time. Once
 all allocations required for a settlement are present, the app executing the settlement
 submits the one Daml transaction that triggers all of the transfers.
 
@@ -139,11 +139,11 @@ support the workflows along the following lines:
    matched bid on an exchange app or they requested to purchase a good in
    exchange for some of their asset holdings.
 2. The user sees the requested asset allocation for that settlement in their wallet
-   and use the wallet to create the Daml transaction that instructs the registry
+   and uses the wallet to create the Daml transaction that instructs the registry
    to create a corresponding allocation.
-3. The app's backend observes the creation of the allocation on its validator node.
-   It checks whether all allocations for the settlement have been created, and if yes,
-   then the app provider (often automated through the app backend) submits the
+3. The app  observes the creation of the allocation on its validator node.
+   It checks whether all allocations for the settlement have been created and, if yes,
+  it submits the
    transaction that completes the settlement, which includes the execution of
    all transfers of the allocated assets.
 
