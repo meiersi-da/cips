@@ -39,13 +39,13 @@ proposal is available [here](#implementation-proposal).
 This standard is concerned with three kinds of applications:
 
 - **asset registries**:
-  which are used to manage the ownership records of Canton Network
-  tokens. For example, Amulet as the app backing Canton Coin, or Brale using
+  which are used to manage the ownership records of tokenized assets.
+  For example, Amulet as the app backing Canton Coin, or Brale using
   the Digital Asset tokenization utility app to issue SBC on Canton.
 
 - **wallets and custody solutions**:
-  which are used by investors to manage their Canton Network token holdings
-  across multiple asset registries. For example, DFNS, Copper, HydraX, or future
+  which are used by investors to manage their Canton Network asset holdings
+  across multiple asset registries. For example, DFNS, Copper, or future
   retail oriented wallets.
 
 - **apps**: any other services which interact with tokenized assets on-chain.
@@ -104,21 +104,21 @@ some of their asset holdings to a settlement request for a fixed amount of time.
 all allocations required for a settlement are present, the app executing the settlement
 submits the one Daml transaction that triggers all of the transfers.
 
-More concretely, the standard specifies APIs that enable apps and wallets to
-support the workflows along the following lines:
+More concretely, the standard specifies APIs that enable an app, called the
+settlement app in the remainder of the section, and wallets to support the
+workflows along the following lines:
 
-1. The user uses the app to get to a point where they are required to deliver
+1. The user uses the settlement app to get to a point where they are required to deliver
    some of their assets as part of a settlement. For example, they made a
    matched bid on an exchange app or they requested to purchase a good in
    exchange for some of their asset holdings.
 2. The user sees the requested asset allocation for that settlement in their wallet
    and uses the wallet to create the Daml transaction that instructs the registry
    to create a corresponding allocation.
-3. The app  observes the creation of the allocation on its validator node.
+3. The settlement app  observes the creation of the allocation on its validator node.
    It checks whether all allocations for the settlement have been created and, if yes,
-  it submits the
-   transaction that completes the settlement, which includes the execution of
-   all transfers of the allocated assets.
+   it submits the transaction that completes the settlement, which includes the
+   execution of all transfers of the allocated assets.
 
 All settlements specify a deadline, and allocations are only valid until that deadline.
 Thus the asset holdings are only locked to an allocation until that deadline, and
@@ -400,7 +400,7 @@ option to the user to inspect the full sub-transaction below the choice.
 
 #### Total Supply
 
-Registries may optionally report the total supply of a token on the off-ledger token metadata API.
+Registries may optionally report the total supply of a tokenized asset on the off-ledger token metadata API.
 If they decide to do so, then that total supply should be computed by summing up the `amount` field of
 all active  `Holding` contracts with a matching `instrumentId`.
 
@@ -451,7 +451,7 @@ We propose to not do so and ship this data via off-ledger via HTTP APIs for the 
 
 #### On-Ledger Reporting of Total Supply
 
-Reporting the total supply of token off-ledger is done for the similar reasons as shipping UTXOs off-ledger:
+Reporting the total supply of tokenized asset off-ledger is done for the similar reasons as shipping UTXOs off-ledger:
 scalability, traffic costs, and hiding implementation details.
 Moreover, in contrast to public chains, shipping the total supply information on-ledger does not allow
 indepenent verification of the total supply, as the holdings from which it is computed are private.
