@@ -442,7 +442,7 @@ We propose to not do so and ship this data via off-ledger via HTTP APIs for the 
   is thus prone to become a bottleneck. Shipping data on-ledger would imply shipping them via
   a synchronizer that all relevant participants are connected to, which would increase the chance
   of it becoming a bottleneck.
-- *traffic costs*: On the global synchronizer, transactions incur traffic costs. Distributing data off-ledger means instead of paying traffic costs on the global synchronizer you only pay for network egress costs for an HTTP API which is usually significantly cheaper.
+- *traffic costs*: On the Global Synchronizer, transactions incur traffic costs. Distributing data off-ledger means instead of paying traffic costs on the Global Synchronizer you only pay for network egress costs for an HTTP API which is usually significantly cheaper.
 - *hide implementation details*: what UTXO's to fetch for exercising an
   interface choice depends on the implementation of that choice. That implementation will likely
   change over time as part of the registry changing their workflows to address new business needs.
@@ -462,7 +462,7 @@ scalability, traffic costs, and hiding implementation details.
 Moreover, in contrast to public chains, shipping the total supply information on-ledger does not allow
 indepenent verification of the total supply, as the holdings from which it is computed are private.
 
-We believe this to be an OK trade-off, as the registries are already trusted to
+Note that this does not weaken the security, as the registries are already trusted to
 maintain the private holding records and can thus also be trusted to report the
 total supply correctly.
 
@@ -496,7 +496,7 @@ within that interval.
 
 Getting rid of round contracts also requires moving away from the round-based
 holding fees that are currently charged. We expect to replace holding fees with
-a time-based expiry of coins that depends on their amount: for example at
+a time-based expiry of coin contracts that depends on their amount: for example at
 an expiry rate of $1 per year, a coin contract worth $100 could be archived
 by any SV after 100 years. This solves for the problem of SVs not having to
 store dust-coins forever without the complication of time-dependent holding balances.
@@ -593,4 +593,4 @@ This CIP is licensed under CC0-1.0: [Creative Commons CC0 1.0 Universal](https:/
 
 ## Changelog
 
-2025-03-13 - Initial Draft
+2025-03-18 - Initial Draft
