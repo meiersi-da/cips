@@ -44,7 +44,7 @@ This standard is concerned with three kinds of applications:
   the Digital Asset tokenization utility app to issue SBC on Canton.
 
 - **wallets and custody solutions**:
-  which are used by investors to manage their Canton Network asset holdings
+  which are used by investors to manage their holdings of tokenized assets
   across multiple asset registries. For example, DFNS, Copper, or future
   retail oriented wallets.
 
@@ -53,8 +53,8 @@ This standard is concerned with three kinds of applications:
 The standard enables building wallets that provide the following functionality to investors:
 
 1. **Portfolio view**:
-   Display current and past holdings as well as transaction history for all their Canton Network assets together
-   with the total supply of the assets as reported by their registries.
+   Display current and past holdings as well as transaction history for all their asset holdings
+   together with the total supply of the assets as reported by their registries.
 2. **Direct Peer-to-Peer / Free of Payment (FOP) Transfers**:
    Initiate direct peer-to-peer transfers of their holdings and monitor their progress.
    Note that these kind of transfers are also known as free of payment (FOP) transfers in TradFi.
@@ -105,7 +105,7 @@ all allocations required for a settlement are present, the app executing the set
 submits the one Daml transaction that triggers all of the transfers.
 
 More concretely, the standard specifies APIs that enable an app, called the
-settlement app in the remainder of the section, and wallets to support the
+settlement app in the remainder of the section, and wallets to support
 workflows along the following lines:
 
 1. The user uses the settlement app to get to a point where they are required to deliver
@@ -180,7 +180,7 @@ such a call.
 
 Canton Coin (CC) implements all APIs of the standard.
 FOP transfers of CC require receivers to have preapproved incoming transfers from any sender.
-The are completed as part of the single Daml transaction instructing them.
+They are completed as part of the single Daml transaction instructing them.
 Likewise, DVP allocations of CC are created within a single Daml transaction instructing them.
 No preapproval by the receiver is required, as that authorization is expected to
 be funneled through the apps' settlement worklows.
@@ -212,19 +212,19 @@ optionally an off-ledger HTTP API. The six APIs and their purpose are:
 - *allocation instruction API*: uniform way for wallets to create allocations
 
 A draft PR with all Daml and OpenAPI definitions for all six APIs is linked
-below in the [Implementation proposal](#implementation-proposal) section. Daml
+below in the [Implementation Proposal](#implementation-proposal) section. Daml
 APIs are specified using Daml interfaces and HTTP APIs are specified using
 OpenAPI.
 
 The following diagram provides an overview of the interactions enabled by these
-APIs.
+APIs. Arrows point from the API client to the API implementor.
 
 ![API interaction diagram](images/api-diagram.png)
 
 
 #### Implementation Requirements
 
-The code in the [Implementation proposal](#implementation-proposal) provides
+The code in the [Implementation Proposal](#implementation-proposal) provides
 the exact definitions of the APIs together with inline comments specifying the
 exact contracts between API clients and implementors.
 
@@ -246,8 +246,8 @@ to integrate with wallets in a uniform way.
 ##### Global Synchronizer Connectivity for Settlement Workflows
 
 This CIP recommends registries to maximize the utility of their assets by
-connecting to the Global Synchronizer (GS) and supporting the execution of
-settlement workflows with their assets on the GS.  This is only a
+connecting to the Global Synchronizer and supporting the execution of
+settlement workflows with their assets on the Global Synchronizer.  This is only a
 recommendation. They are free to use the token standard APIs on private
 synchronizers as they see fit.
 
@@ -255,8 +255,8 @@ The reason for this recommendation is that the input contracts (i.e., UTXOs) ref
 must all be assigned to the same synchronizer.
 Settlement transactions likely involve multiple registries, holders, and apps.
 Therefore the most likely synchronizer that all input contracts of a settlement transaction
-can be assigned to is the GS.
-Thus the benefit of connecting to the GS for settlement workflows is that this
+can be assigned to is the Global Synchronizer.
+Thus the benefit of connecting to the Global Synchronizer for settlement workflows is that this
 maximizes the chance of there being a synchronizer that can synchronize
 the Daml transactions required for the settlement to complete.
 
@@ -269,7 +269,7 @@ There is a one-to-one correspondence between Daml contracts and UTXOs.
 Canton's UTXOs are annotated with their stakeholders and are only distributed to the nodes hosting these stakeholders.
 
 Constructing transactions requires access to all UTXOs referenced or consumed by the transaction.
-Clients provide this access by retrieving the UTXOs known to their parties from their validator node and
+ledger API clients can retrieve UTXOs known to their parties from their validator node and
 the UTXOs known to an app provider using off-ledger API calls to app-specific services.
 
 The standard proposes to provide UTXO access for constructing transactions involving tokens as follows:
@@ -283,10 +283,10 @@ The standard proposes to provide UTXO access for constructing transactions invol
 
 #### Off-Ledger API Discovery and Access
 
-As explained in the previous section,
-the standard expects registry apps to expose the standard's HTTP endpoints for
-accessing UTXOs to the public internet under a common URL prefix to provide
-maximal freedom for wallets and apps to fetch these.
+As explained in the previous section, the standard expects registry apps to
+expose the standard's HTTP endpoints for accessing UTXOs. It further expects
+these endpoints to be exposed to the public internet under a common URL prefix
+to provide maximal freedom for wallets and apps to fetch these.
 
 The standard does not require requests to these HTTP endpoints be authenticated, as all of them
 either access data that is expected to be public (e.g., registry metadata) or
@@ -345,6 +345,11 @@ metadata keys:
   the off-ledger APIs of a registry, used to [discover the off-ledger APIs of registries](#off-ledger-api-discovery-and-access)
 - `splice.lfdecentralizedtrust.org/lock-context`: used on `Holding` contracts to
   provide a human-readable description of the context for the lock on a holding
+- `splice.lfdecentralizedtrust.org/reason`: used to communicate a human-readable
+  reason for calling a choice. Registries, apps, and wallets should use this to
+  provide a reason when calling choices that advance a workflow differently
+  from the default path (e.g., withdrawing an allocation or aborting a transfer
+  instruction).
 
 
 ##### Metadata Key Syntax
@@ -358,7 +363,7 @@ alphanumerics between. The prefix is optional. If specified, the prefix must be
 a DNS subdomain: a series of DNS labels separated by dots (`.`), not longer than
 253 characters in total, followed by a slash (`/`).
 
-##### CNS Entry Metadata
+##### Storing Generic Metadata in CNS 1.0 Entries
 
 At the time of writing, entries in the
 [Canton Name Service 1.0 (CNS)](https://docs.dev.sync.global/app_dev/scan_api/scan_aggregates_api.html#looking-up-ans-entries)
@@ -379,8 +384,9 @@ returns the CNS entry for the party with the lexicographically smallest name.
 Registry operators must make sure to store their metadata on that entry for the above procedure to work.
 The easiest way to do so is to allocate at most one CNS entry for their `admin` party.
 
+#### Additional Portfolio View Concerns
 
-#### Transaction History
+##### Transaction History
 
 The standard aims to enable wallet clients to serve a transaction history view to their users that explains
 all changes to a users' portfolio view and their view of in-progress transfers.
@@ -398,7 +404,7 @@ standard. For example, they could show the JSON rendering of the choice name and
 argument together with the archival and creation of the affected contracts; and offer an
 option to the user to inspect the full sub-transaction below the choice.
 
-#### Total Supply
+##### Total Supply
 
 Registries may optionally report the total supply of a tokenized asset on the off-ledger token metadata API.
 If they decide to do so, then that total supply should be computed by summing up the `amount` field of
