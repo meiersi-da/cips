@@ -15,46 +15,6 @@
 TODO: write
 
 
-## Motivation
-
-This CIP proposes to remove Canton Coin fees and adjust holding fees so
-that users do not have to pay fees when transferring Canton Coin and
-application developers can build applications without special code to
-deal with these fees. Thus making Canton Coin more attractive for both users and
-application developers.
-
-Removing these fees is possible because
-the majority of burn on MainNet is due to traffic purchases and
-because app activity is expected to be tracked using explicit app activity
-markers (see [CIP-0047](../cip-0047/cip-0047.md)) instead of extra CC transfers.
-
-In the spirit of improving the usability of Canton Coin, this CIP further proposes to
-remove the CC fees for creating or renewing `TransferPreapproval` contracts and to have
-users collect their validator rewards directly instead of indirectly via
-the validator operator party.
-The motivation is as follows:
-
-* Removing CC fees for `TransferPreapproval` contracts simplifies user setup.
-  In particular, it allows users to create a preapproval for receiving CC before they own CC.
-  The traffic cost of setting up a `TransferPreapproval` is significant enough to prevent abuse,
-  so there is no need for an additional CC fee.
-
-* Switching to direct collection of validator rewards simplifies user setup, ensures traffic purchasers
-  get rewarded for their activity, and solves the one outstanding security issue (CC-3)
-  identified in the [Quantstamp security audit of Canton Coin](https://lists.sync.global/g/tokenomics/message/575).
-
-  User setup is simplified because no `ValidatorRight` contracts need to be set up
-  to designate the validator operator party for a user.
-  Not having to manage `ValidatorRight` contracts is especially useful when migrating between validator operators,
-  or when [recovering CC balance from keys only](https://docs.dev.sync.global/validator_operator/validator_disaster_recovery.html#re-onboard-a-validator-and-recover-balances-of-all-users-it-hosts).
-
-  Switching from indirect to direct collection of validator rewards is
-  desired because setting the CC fees to zero means that all validator activity
-  records are due to traffic purchases. Direct collection thus results in the right tokenomics:
-  the purchaser gets rewarded instead of the validator operator party of the
-  validator node hosting the purchaser.
-
-
 
 ## Specification
 
@@ -125,6 +85,47 @@ Concretely, this means:
 - Do not deduct holding fees from totals or coin balances in Splice App UIs.
   The only place where holding fees should be shown is in the transaction details
   for a transaction that expires a "dust coin".
+
+
+## Motivation
+
+This CIP proposes to remove Canton Coin fees and adjust holding fees so
+that users do not have to pay fees when transferring Canton Coin and
+application developers can build applications without special code to
+deal with these fees. Thus making Canton Coin more attractive for both users and
+application developers.
+
+Removing these fees is possible because
+the majority of burn on MainNet is due to traffic purchases and
+because app activity is expected to be tracked using explicit app activity
+markers (see [CIP-0047](../cip-0047/cip-0047.md)) instead of extra CC transfers.
+
+In the spirit of improving the usability of Canton Coin, this CIP further proposes to
+remove the CC fees for creating or renewing `TransferPreapproval` contracts and to have
+users collect their validator rewards directly instead of indirectly via
+the validator operator party.
+The motivation is as follows:
+
+* Removing CC fees for `TransferPreapproval` contracts simplifies user setup.
+  In particular, it allows users to create a preapproval for receiving CC before they own CC.
+  The traffic cost of setting up a `TransferPreapproval` is significant enough to prevent abuse,
+  so there is no need for an additional CC fee.
+
+* Switching to direct collection of validator rewards simplifies user setup, ensures traffic purchasers
+  get rewarded for their activity, and solves the one outstanding security issue (CC-3)
+  identified in the [Quantstamp security audit of Canton Coin](https://certificate.quantstamp.com/full/canton-coin-an-implementation-of-splice-amulet/d95ae8a5-34b5-4245-8afc-bfd5435e4632/index.html).
+
+  User setup is simplified because no `ValidatorRight` contracts need to be set up
+  to designate the validator operator party for a user.
+  Not having to manage `ValidatorRight` contracts is especially useful when migrating between validator operators,
+  or when [recovering CC balance from keys only](https://docs.dev.sync.global/validator_operator/validator_disaster_recovery.html#re-onboard-a-validator-and-recover-balances-of-all-users-it-hosts).
+
+  Switching from indirect to direct collection of validator rewards is
+  desired because setting the CC fees to zero means that all validator activity
+  records are due to traffic purchases. Direct collection thus results in the right tokenomics:
+  the purchaser gets rewarded instead of the validator operator party of the
+  validator node hosting the purchaser.
+
 
 
 ## Rationale
