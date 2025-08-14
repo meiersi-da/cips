@@ -43,9 +43,16 @@ Change the Daml code for Amulet such that no holding fees are charged when using
 as an input to a transfer. Combined with the config changes to remove CC fees this
 guarantees that the sum of coin inputs is always equal to the sum of coin outputs in a transfer.
 
-Holding fees are still charged when a coin contract is expired by the DSO
-because the holding fees surpassed the coin's initial amount, which ensures
-that "dust coins" (see [Rationale](#rationale)) do not accumulate and slow down the system.
+SVs retain the ability to expire coins after a time period proportional to the value.
+Concretely, they can continue to exercise the `Amulet_Expire` choice
+when the holding fees for a coin surpass the initial amount of the coin. These
+holding fees are determined as before using the formula:
+```
+holdingFees currentRound (ExpiringAmount initialAmount createdAtRound ratePerRound) =
+  ratePerRound * (currentRound - createdAt)
+```
+where the `ExpiringAmount` parameters are stored on the `Amulet` contract and are set
+as part of the transfer that created the coin.
 
 
 ### Switch to Direct Validator Reward Collection
