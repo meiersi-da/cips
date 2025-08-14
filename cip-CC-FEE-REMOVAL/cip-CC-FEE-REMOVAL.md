@@ -1,6 +1,6 @@
 <pre>
   CIP:  CIP XXXX
-  Title: Drop Canton Coin Fees
+  Title: Canton Coin Fee Removal
   Author:
     Simon Meier
   License: CC0-1.0
@@ -17,7 +17,7 @@ TODO: write
 
 ## Motivation
 
-This CIP proposes to drop Canton Coin fees and adjust holding fees so
+This CIP proposes to remove Canton Coin fees and adjust holding fees so
 that users do not have to pay fees when transferring Canton Coin and
 application developers can build applications without special code to
 deal with these fees. Thus making Canton Coin more attractive for both users and
@@ -79,7 +79,7 @@ Change the Amulet Rules configuration parameters as follows:
 ### Adjust Holding Fees
 
 Change the Daml code for Amulet such that no holding fees are charged when using a coin
-as an input to a transfer. Combined with the config changes to drop CC fees this
+as an input to a transfer. Combined with the config changes to remove CC fees this
 guarantees that the sum of coin inputs is always equal to the sum of coin outputs in a transfer.
 
 Holding fees are still charged when a coin contract is expired by the DSO
