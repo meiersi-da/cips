@@ -62,8 +62,9 @@ only be used to mint rewards by the user that generated them.
 Deprecate `ValidatorRight` contracts and no longer require them to collect validator rewards.
 
 Change the automatic reward collection mechanism in the Splice Wallet to select
-the user's validator activity records instead of the validator operator party's
-activity records.
+only the user's own validator activity records instead of all validator activity records
+for which there exists a `ValidatorRight` listing the user as the validator operator party.
+
 
 ### Drop CC Fees for TransferPreapproval
 
