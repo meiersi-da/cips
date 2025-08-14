@@ -2,27 +2,18 @@
   CIP:  CIP XXXX
   Title: Drop Canton Coin Fees
   Author:
-    Moritz Kiefer
     Simon Meier
   License: CC0-1.0
-  Status: Approved
+  Status: Working Draft
   Type: Tokenomics
-  Created: 2025-02-12
-  Approved: 2025-03-24
+  Created: 2025-08-14
+  Approved:
 </pre>
 
 ## Abstract
 
+TODO: write
 
-Currently, featured applications can only generate activity records
-and mint rewards as part of Canton Coin transfers. However, this
-excludes a significant amount of applications that do not inherently involve Canton Coin.
-To address this problem and allow rewarding applications that do not
-involve Canton Coin, we propose introducing the ability for featured applications to create
-app activity markers without transfering Canton Coin. An app activity
-marker is equivalent to the existing app activity records created as
-part of a Canton Coin transfer recording a fixed amount of burned CC. The value of this marker
-will be determined by a new governance parameter.
 
 ## Motivation
 
@@ -66,84 +57,109 @@ validator node hosting the purchaser.
 
 ## Specification
 
+The changes in this CIP are initially implemented as changes to the Amulet Rules configuration where possible,
+and changes to the Daml code and Splice apps where necessary.
+In the future, their code might be further simplified by completely removing the logic for handling CC fees.
 
 
+### Drop Canton Coin Fees
+
+Change the Amulet Rules configuration parameters as follows:
+
+| Configuration                               | Value     |
+|---------------------------------------------|-----------|
+| `transferConfig.createFee.fee`              | `0.0`     |
+| `transferConfig.transferFee.initialRate`    | `0.0`     |
+| `transferConfig.transferFee.steps.0._2`     | `0.0`     |
+| `transferConfig.transferFee.steps.1._2`     | `0.0`     |
+| `transferConfig.transferFee.steps.2._2`     | `0.0`     |
+| `transferConfig.lockHolderFee.fee`          | `0.0`     |
 
 
-### Overview
+### Adjust Holding Fees
+
+Change the Daml code for Amulet such that no holding fees are charged when using a coin
+as an input to a transfer. Combined with the config changes to drop CC fees this
+guarantees that the sum of coin inputs is always equal to the sum of coin outputs in a transfer.
+
+Holding fees are still charged when a coin contract is expired by the DSO
+because the holding fees surpassed the coin's initial amount, which ensures
+that "dust coins" (see [Rationale](#rationale)) can be garbage collected.
 
 
+### Switch to Direct Validator Reward Collection
+
+Change the Daml code for Amulet such that validator activity records can
+only be used to mint rewards by the user that generated them.
+Deprecate `ValidatorRight` contracts and no longer require them to collect validator rewards.
+
+Change the automatic reward collection mechanism in the Splice wallet to select
+the user's validator activity records instead of the validator operator party's
+activity records.
+
+### Drop CC Fees for TransferPreapproval
+
+Change the Amulet Rules configuration parameters as follows:
+
+| Configuration                               | Value     |
+|---------------------------------------------|-----------|
+| `transferPreapprovalFee`                    | `0.0`     |
+
+Introduce a new Amulet Rules configuration parameter `maxTransferPreapprovalDuration`
+that limits the maximum life-time of a `TransferPreapproval` contract. The default
+value is 3 months.
+
+This limitation is required to protect SV nodes from abuse by malicious users
+that create lots of long-lived `TransferPreapproval` contracts. See [Rationale](#rationale) for details.
 
 
-### Details
+### Adjust Splice App UIs
 
-A draft PR with all Daml changes is linked below in the (#reference-implementation) section.
+Change UIs to reflect the removal of Canton Coin fees and the adjustment of holding fees.
+Concretely, this means:
 
-#### Core Daml Model
+- Remove references to Canton Coin fee parameters from Splice App UIs
+  except for UIs that show the internal configuration of the Amulet Rules.
+- Ensure the UI elements only show non-zero fee values.
+- Do not deduct holding fees from totals or coin balances in Splice App UIs.
+  The only place where holding fees are shown is in the transaction details
+  for a transaction that expires a "dust coin".
 
-- A new template `FeaturedAppActivityMarker` is added that stores the provider party, beneficiary party and weight.
-- Add a choice `FeaturedAppRight_CreateActivityMarker` on the existing `FeaturedAppRight` Daml template to create a `FeaturedAppActivityMarker`.
-  This choice accepts a list of beneficiary parties and weights with the requirements that weights add up to 1.0.
-- Add a choice `AmuletRules_ConvertFeaturedAppActivityMarkers` that
-  allows the SVs to convert `FeaturedAppActivityMarker` contracts into
-  `AppRewardCoupon` contracts.
-- Extend the `AppRewardCoupon` template to track the beneficiary party.
-- The beneficiary feature will also be made available to acitvity records generated from Canton Coin transfers.
-
-#### External Daml API
-
-To allow applications to decouple themselves from the internal amulet models and reduce the impact of upgrades to those, an API based on [Daml interfaces](https://docs.daml.com/daml/reference/interfaces.html) is provided consisting of:
-
-- An interface `Splice.Api.FeaturedAppRightV1.FeaturedAppRight` implemented by the existing `FeaturedAppRight` template.
-- A choice `FeaturedAppRight_CreateActivityMarker` on that interface to create a marker contract.
-  This choice accepts a list of beneficiary parties and weights with the requirements that weights add up to 1.0.
-- An interface `Splice.Api.FeaturedAppRightV1.FeaturedAppActivityMarker` implemented by the newly introduced `FeaturedAppActivityMarker` template.
 
 ## Rationale
 
-### Alternatives considered
+TODO: write
+- dust coins
+- actual values for burn on MainNet
+- cost of pre-approval creation in traffic
 
-#### Artificial Canton Coin transfers
-
-Applications that do not use Canton Coin could still add artificial
-canton coin transfers to their application to generate application
-activity records. However, this has a few downsides over the marker
-contracts proposed in this CIP:
-
-1. It adds additional complexity to applications to generate those
-   transfers. Creating the marker contracts only depends on the
-   `FeaturedAppRight` contract. A CC transfer requires a sender,
-   receiver, some CC funds, access to an open mining round contract
-   and access to amulet rules.
-2. It increases traffic costs: A CC transfer is more complex, not just
-   in terms of code needed to create it, but also in terms of
-   transaction size: adding a dependency on Canton Coin transfers significantly increases the size of transactions.
-3. Canton Coin transfers pin down the `OpenMiningRound` contract which
-   is only active for ~20 minutes. This can limit their usage in
-   combination with
-   [external signing](https://github.com/digital-asset/canton/blob/main/community/ledger-api/src/main/protobuf/com/daml/ledger/api/v2/interactive/README.md)
-   as it does not allow for long delays between preparing a
-   transaction and executing the signed transaction. While it is possible to circumvent this by splitting the transfer across two transactions where only the first one is externally signed, this would then require those two-step flows in all applications.
-
-#### Traffic-Based Activity Markers
-
-This CIP proposes attributing a constant value to each activity marker
-contract determined by `featuredAppActivityMarkerAmount`. Another
-attractive option would be to instead make it proportional to the
-traffic costs paid for a transaction. That is a viable long-term option.
-
-However, this would be a significantly more complex change, which would delay this feature. We propose to implement the simpler option first.
 
 ## Backwards compatiblity
 
-The app reward activity markers are a new API and are purely
-additive. All existing APIs continue to function as is. In particular,
-Canton Coin transfers still also generate activity records that can be
-minted as rewards.
+The configuration changes are backwards compatible by construction.
+
+The adjustment of holding fees is backwards compatible for all apps that parse
+the actual holding fees for transactions from the transaction details
+(i.e., the ``TransferSummary.holdingFees`` field for transfers and `Amulet_Expire` for "dust coin" expiry.).
+The `holdingFees` field will continue to be present, but it will always show a zero value.
+The meaning of an `Amulet_Expire` transaction is unchanged:
+it charges exactly `Amulet.amount.initialAmount` in holding fees.
+
+Apps that attempt to predict holding fees, need to adjust their UIs and logic to
+take the new, simplier explicit charging of holding fees into account.
+
+The change to direct validator reward collection is not backwards compatible.
+It requires apps that use validator activity records to
+be updated to use the user's activity records instead of the validator operator party's activity records.
+
+We deem this change acceptable because to the best of our knowledge only the Splice wallet
+uses validator activity records to mint rewards, and it will be updated to switch its logic
+based on whether the new Daml models from this CIP are enabled.
+
 
 ## Reference implementation
 
-A reference implementation of the Daml changes can be found in the [decentralized-canton-sync repository](https://github.com/digital-asset/decentralized-canton-sync/tree/cocreature/featured-app-activitymarkers).
+TODO: build the branch
 
 ## Copyright
 
@@ -151,8 +167,5 @@ This CIP is licensed under CC-1.0.
 
 ## Changelog
 
-* **2025-03-24:** - Approved by cip-vote
-* **2025-03-13:** - Added support for splitting the reward markers across different beneficiary parties.
-* **2025-02-12:** - Intial Draftof the proposal.
-* **2025-03-24** Approval announced via [mailing list thread](https://lists.sync.global/g/cip-announce/topic/cip_0047_featured_app/111882136)
+* **2025-08-14:** - Draft writing started - WIP
 
