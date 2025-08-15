@@ -142,7 +142,7 @@ The motivation is as follows:
 
 To substantiate the claim that the majority of burn on MainNet is due to traffic purchases,
 we can look at the burn statistics for MainNet.
-In the 3 month time period from 2025-04-01 to 2025-07-31,
+In the 3 month time period from 2025-05-14 to 2025-08-14,
 the total burn on MainNet was 446'680'130 CC out of which
 423'475'365 CC were due to traffic purchases. Thus about
 94.8% of the burn was due to traffic purchases.
