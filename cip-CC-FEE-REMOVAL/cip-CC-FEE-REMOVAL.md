@@ -138,6 +138,21 @@ The motivation is as follows:
 
 ## Rationale
 
+### Burn on MainNet
+
+To substantiate the claim that the majority of burn on MainNet is due to traffic purchases,
+we can look at the burn statistics for MainNet.
+In the 3 month time period from 2025-04-01 to 2025-07-31,
+the total burn on MainNet was 446'680'130 CC out of which
+423'475'365 CC were due to traffic purchases. Thus about
+94.8% of the burn was due to traffic purchases.
+
+In the future, we expect even more burn due to traffic purchases
+when more non-CC assets and workflows are used on Canton Network.
+
+Thus giving up the burn pressure from CC fees seems
+worthwhile given the user and developer experience improvements
+that removing CC fees and adjusting holding fees brings.
 
 ### Dust Coins
 
@@ -181,6 +196,8 @@ trafficCost = 60 $/MB * 160 B / (0.05 $/CC * 1'000'000 B/MB) = 0.96 CC ~= 0.05$
 
 
 
+
+### TODO
 
 TODO: write
 - dust coins
