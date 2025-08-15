@@ -138,6 +138,50 @@ The motivation is as follows:
 
 ## Rationale
 
+
+### Dust Coins
+
+We use the term **dust coins** to refer to coin contracts whose value is less
+than the traffic fees it would cost to use them as an input to a transfer.
+
+Dust coins are not economically viable to use to fund transfers.
+They thus tend to not be used by their owners and accumulate in the active contract set of SV nodes.
+This is a problem because contracts in the active contract are stored and indexed in
+the Postgres DB maintained by SV nodes.
+Dust coins thus contribute to the operating costs of SV nodes.
+Limiting the number of dust coins is therefore important to bound the operating costs of SV nodes.
+
+
+Dust coins are not unique to Canton Network
+https://www.investopedia.com/terms/b/bitcoin-dust.asp
+
+
+The `Amulet_Expire` choice serves the pupose to
+
+
+An ever growing number of dust coins
+would thus lead to
+
+
+
+in the active contract set thus leads to an ever growing Postgres DB size and
+increased indexing costs for SV nodes. This is a problem for the Canton Network as a whole
+
+The indices  thus incur both storage and compute costs on SV nodes.
+
+With the current configuration parameters of
+- traffic price: 60 $/MB
+- coin conversion rate: 0.05 $/CC
+- byte size of a coin contract: 160 bytes (TODO: determine actual size)
+
+the traffic cost of using a coin as an input to a transfer is
+```
+trafficCost = 60 $/MB * 160 B / (0.05 $/CC * 1'000'000 B/MB) = 0.96 CC ~= 0.05$
+``
+
+
+
+
 TODO: write
 - dust coins
 - actual values for burn on MainNet
