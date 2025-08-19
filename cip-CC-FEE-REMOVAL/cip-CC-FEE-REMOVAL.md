@@ -138,6 +138,29 @@ The motivation is as follows:
 
 ## Rationale
 
+### Developer Challenges due to CC Fees
+
+We are aware of the following challenges that developers face when building applications
+that use Canton Coin:
+
+* **Funding fees in multi-step workflows is cumbersome.** For example, a transfer-offer
+  over a fixed amount of CC requires the sender to lock additional CC to pay for the CC fees
+  of the actual transfer. This amount of fees is not known at the time of creating the transfer-offer,
+  so the sender has to lock more CC than they expect to be needed for the transfer. For example,
+  token standard transfers of CC lock 4x the expected CC fees to ensure that the transfer can be executed
+  even if the CC fees change in the meantime (see [code](https://github.com/hyperledger-labs/splice/blob/28d17694f42c4b9ff96b6487ab994d43e9879a3c/daml/splice-amulet/daml/Splice/Amulet/TwoStepTransfer.daml#L85-L89)).
+
+* **CC fee accounting is challenging.** CC is a financial asset, which requires accurate financial accounting of the CC balance of users.
+  Thus any application using CC needs to implement logic to account for the CC fees and book them properly.
+
+* **Application design overhead** every application using CC needs to design the CC fee funding workflow, and decide
+  how the fees are split between the different parties involved in the application. Furthermore, their UI design
+  needs to account for the CC fees and show them to users in a way that is understandable. All of this is
+  overhead that distracts developers from building the core functionality of their application.
+
+These are non-trivial challenges that do not seem worth the benefit of the extra burn pressure that CC fees create.
+
+
 ### Burn on MainNet
 
 To substantiate the claim that the majority of burn on MainNet is due to traffic purchases,
@@ -149,59 +172,55 @@ the total burn on MainNet was 446'680'130 CC out of which
 
 In the future, we expect even more burn due to traffic purchases
 when more non-CC assets and workflows are used on Canton Network.
-
 Thus giving up the burn pressure from CC fees seems
 worthwhile given the user and developer experience improvements
 that removing CC fees and adjusting holding fees brings.
 
-### Dust Coins
+### Dust Coins and Holding Fees
 
-We use the term **dust coins** to refer to coin contracts whose value is less
-than the traffic fees it would cost to use them as an input to a transfer.
+We refrain from completely removing holding fees,
+as that would lead to ever-increasing operational costs for SVs
+due to the accumulation of "dust coins".
+
+Dust coins are coin contracts whose value is less than the traffic fees it would cost to use them as an input to a transfer. Dust also exists
+on other chains like Bitcoin. There it takes the form of UTXOs whose
+inclusion in a transaction is uneconomical.
 
 Dust coins are not economically viable to use to fund transfers.
 They thus tend to not be used by their owners and accumulate in the active contract set of SV nodes.
-This is a problem because contracts in the active contract are stored and indexed in
-the Postgres DB maintained by SV nodes.
-Dust coins thus contribute to the operating costs of SV nodes.
+This is a problem because contracts in the active contract are stored and indexed in the Postgres DB maintained by SV nodes;
+and thus contribute to the operating costs of SV nodes.
 Limiting the number of dust coins is therefore important to bound the operating costs of SV nodes.
 
+The mechanism based on the `Amulet_Expire` choice proposed in this CIP
+incentivizes coin owners to consolidate their long-term holdings in
+coin contracts with higher values; and thus lowers the operating costs of
+the SV nodes spent on maintaining these coin contracts.
 
-Dust coins are not unique to Canton Network
-https://www.investopedia.com/terms/b/bitcoin-dust.asp
+We expect the mechanism to be de-facto transparent to users, as
+even a coin contract with a value of 0.01 $ will be live for
+3.65 days with a `holdingFeeRate` of `1 $/year`. Thus it is unlikely
+that there is contention between transactions by coin owners and SVs over the
+expiration of a coin contract. Furthermore, requiring users to
+consolidate long-term holdings in coin contracts with a value
+of 10 $ or higher so that they are live for at least 10 years seems
+reasonable as well.
 
-
-The `Amulet_Expire` choice serves the pupose to
-
-
-An ever growing number of dust coins
-would thus lead to
-
-
-
-in the active contract set thus leads to an ever growing Postgres DB size and
-increased indexing costs for SV nodes. This is a problem for the Canton Network as a whole
-
-The indices  thus incur both storage and compute costs on SV nodes.
-
-With the current configuration parameters of
-- traffic price: 60 $/MB
-- coin conversion rate: 0.05 $/CC
-- byte size of a coin contract: 160 bytes (TODO: determine actual size)
-
-the traffic cost of using a coin as an input to a transfer is
-```
-trafficCost = 60 $/MB * 160 B / (0.05 $/CC * 1'000'000 B/MB) = 0.96 CC ~= 0.05$
-``
-
+Likewise for developers, the key change in this CIP is that holding fees are not charged
+when transferring coins, but only explicitly on expired coin contracts.
+The explicit charging via the `Amulet_Expire` choice makes accounting for holding fees
+simple, as exactly the value of the coin contract is charged as holding fees.
+Furthermore, not charging any CC fees on transfers means that developers no longer
+have to manage funding CC fees when implementing multi-step
+workflows that transfer coins. Developers only have to ensure that workflows
+do not rely on very low value coin contracts to be live for a long time,
+which we expect to not be a problem in practice.
 
 
 
 ### TODO
 
 TODO: write
-- dust coins
-- actual values for burn on MainNet
 - cost of pre-approval creation in traffic
 - self-issued pre-approvals
 
