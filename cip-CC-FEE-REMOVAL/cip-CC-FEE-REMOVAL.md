@@ -52,34 +52,34 @@ holdingFees currentRound (ExpiringAmount initialAmount createdAtRound ratePerRou
   ratePerRound * (currentRound - createdAt)
 ```
 where the `ExpiringAmount` parameters are stored on the `Amulet` contract and are set
-as part of the transfer that created the coin.
+as part of the transfer that created the `Amulet` contract.
 
 
 ### Switch to Direct Validator Reward Collection
 
-Change the Daml code for Amulet such that validator activity records can
-only be used to mint rewards by the user that generated them.
-Deprecate `ValidatorRight` contracts and no longer require them to collect validator rewards.
+Change the Daml code for `Amulet` as follows:
+
+* Change `AmuletRules_Transfer` such that validator activity records can
+  only be used to mint rewards by the user that generated them.
+* Deprecate `ValidatorRight` contracts and disable the choice `ValidatorRewardCoupon_ArchiveAsValidator` that was used
+  before this CIP by validator operator parties to archive validator activity records of their users as part of a transfer.
+* Change `ExternalPartySetupProposal` such that it no longer creates a `ValidatorRight` contract for the
+  external party that is being set up.
 
 Change the automatic reward collection mechanism in the Splice Wallet to select
 only the user's own validator activity records instead of all validator activity records
 for which there exists a `ValidatorRight` listing the user as the validator operator party.
 
 
-### Drop CC Fees for TransferPreapproval
+### Adjust CC Fees for TransferPreapproval
 
-Change the Amulet Rules configuration parameters as follows:
+Introduce a new Amulet Rules configuration parameter `transferPreapprovalBaseDuration`
+set to a default value of 90 days.
 
-| Configuration                               | Value     |
-|---------------------------------------------|-----------|
-| `transferPreapprovalFee`                    | `0.0`     |
-
-Introduce a new Amulet Rules configuration parameter `maxTransferPreapprovalDuration`
-that limits the maximum life-time of a `TransferPreapproval` contract. The default
-value is 3 months.
-
-This limitation is required to protect SV nodes from abuse by malicious users
-that create lots of long-lived `TransferPreapproval` contracts. See [Rationale](#rationale) for details.
+Change the code that charges the fee for creating or renewing a `TransferPreapproval` contract
+such that the existing time-based `transferPreapprovalFee` is only charged for
+the lifetime of the `TransferPreapproval` contract that is longer than the
+`transferPreapprovalBaseDuration`.
 
 
 ### Adjust Splice App UIs
@@ -108,15 +108,17 @@ the majority of burn on MainNet is due to traffic purchases and
 because app activity is expected to be tracked using explicit app activity
 markers (see [CIP-0047](../cip-0047/cip-0047.md)) instead of extra CC transfers.
 
-In the spirit of improving the usability of Canton Coin, this CIP further proposes to
-remove the CC fees for creating or renewing `TransferPreapproval` contracts and to have
-users collect their validator rewards directly instead of indirectly via
-the validator operator party.
+In the spirit of improving the usability of Canton Coin, this CIP further proposes
+to have users collect their validator rewards directly instead of indirectly via the validator operator party
+and to adjust the CC fees for creating or renewing `TransferPreapproval` contracts so
+that short-lived preapprovals can be created without paying CC fees.
+
 The motivation is as follows:
 
-* Removing CC fees for `TransferPreapproval` contracts simplifies user setup.
+* Removing CC fees for creating short-lived `TransferPreapproval` contracts simplifies user setup.
   In particular, it allows users to create a preapproval for receiving CC before they own CC.
-  The traffic cost of setting up a `TransferPreapproval` is significant enough to prevent abuse,
+  The traffic cost of setting up a `TransferPreapproval` is significant enough to prevent abuse
+  for TransferPreapprovals that expire in 90 days or less,
   so there is no need for an additional CC fee.
 
 * Switching to direct collection of validator rewards simplifies user setup, ensures traffic purchasers
@@ -152,6 +154,13 @@ that use Canton Coin:
 
 * **CC fee accounting is challenging.** CC is a financial asset, which requires accurate financial accounting of the CC balance of users.
   Thus any application using CC needs to implement logic to account for the CC fees and book them properly.
+
+  In particular, CC fees are non-standard compared to other tokens.
+  The [Canton Network Token Standard](https://github.com/global-synchronizer-foundation/cips/blob/main/cip-0056/cip-0056.md)
+  thus only has minimal support to report the total amount of burned assets on a transfer.
+  Token standard wallets that want to show detailed CC fees thus need to implement CC-specific logic
+  to parse the actual CC transaction details and extract the CC fees from them. Likewise, providing a preview on
+  the CC fees would also require the wallet to implement CC-specific logic to reimplment the CC fee calculation.
 
 * **Application design overhead** every application using CC needs to design the CC fee funding workflow, and decide
   how the fees are split between the different parties involved in the application. Furthermore, their UI design
