@@ -4,16 +4,23 @@
   Author:
     Simon Meier
   License: CC0-1.0
-  Status: Working Draft
+  Status: Draft
   Type: Tokenomics
-  Created: 2025-08-14
+  Created: 2025-08-19
   Approved:
 </pre>
 
 ## Abstract
 
-TODO: write
-
+This CIP proposes to remove Canton Coin fees and adjust holding fees so that
+users do not have to pay fees when transferring Canton Coin and application
+developers can build applications without special code to deal with these fees.
+This CIP further proposes to have users collect their validator rewards directly
+instead of indirectly via the validator operator party
+and to adjust the CC fees for creating or renewing `TransferPreapproval` contracts so
+that short-lived preapprovals (expiry < 90 days) can be created without paying CC fees.
+Thus making Canton Coin more attractive for both users and application
+developers.
 
 
 ## Specification
@@ -185,6 +192,7 @@ Thus giving up the burn pressure from CC fees seems
 worthwhile given the user and developer experience improvements
 that removing CC fees and adjusting holding fees brings.
 
+
 ### Dust Coins and Holding Fees
 
 We refrain from completely removing holding fees,
@@ -226,16 +234,6 @@ do not rely on very low value coin contracts to be live for a long time,
 which we expect to not be a problem in practice.
 
 
-
-### TODO
-
-TODO: write
-- cost of pre-approval creation in traffic
-- self-issued pre-approvals
-- switching to direct validator reward collection
-
-
-
 ## Backwards compatiblity
 
 The configuration changes are backwards compatible by construction.
@@ -253,10 +251,16 @@ The change to direct validator reward collection is not backwards compatible for
 that collect validator rewards. However, to the best of our knowledge, the only such app is the Splice wallet,
 which will be updated as part of implementing this CIP.
 
+The change to adjust the CC fees for `TransferPreapproval` is backwards compatible
+as it only changes the fee calculation in the existing choices.
+
 
 ## Reference implementation
 
-TODO: build the branch
+Reference implementations of the Daml changes for this CIP are available in the following set of stacked PRs:
+* [PR to adjust holding fees](https://github.com/hyperledger-labs/splice/pull/1722)
+* [PR to switch to direct validator reward collection](https://github.com/hyperledger-labs/splice/pull/1950/files)
+* [PR to adjust CC fees for `TransferPreapproval`](https://github.com/hyperledger-labs/splice/pull/1954/files)
 
 
 ## Copyright
@@ -265,5 +269,5 @@ This CIP is licensed under CC-1.0.
 
 ## Changelog
 
-* **2025-08-14:** - Draft writing started - WIP
+* **2025-08-19:** - Draft ready for review
 
