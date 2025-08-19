@@ -223,6 +223,8 @@ which we expect to not be a problem in practice.
 TODO: write
 - cost of pre-approval creation in traffic
 - self-issued pre-approvals
+- switching to direct validator reward collection
+
 
 
 ## Backwards compatiblity
@@ -246,6 +248,7 @@ which will be updated as part of implementing this CIP.
 ## Reference implementation
 
 TODO: build the branch
+
 
 ## Copyright
 
