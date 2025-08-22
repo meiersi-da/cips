@@ -43,6 +43,9 @@ Change the Amulet Rules configuration parameters as follows:
 | `transferConfig.transferFee.steps.2._2`     | `0.0`     |
 | `transferConfig.lockHolderFee.fee`          | `0.0`     |
 
+Change the Daml code for rewards issuance in `AmuletRules_Transfer` such that featured app rewards
+are issued independently of whether CC usage fees were charged.
+
 
 ### Adjust Holding Fees
 
@@ -261,7 +264,7 @@ Reference implementations of the Daml changes for this CIP are available in the 
 * [PR to adjust holding fees](https://github.com/hyperledger-labs/splice/pull/1722)
 * [PR to switch to direct validator reward collection](https://github.com/hyperledger-labs/splice/pull/1950/files)
 * [PR to adjust CC fees for `TransferPreapproval`](https://github.com/hyperledger-labs/splice/pull/1954/files)
-
+* [PR to issue featured app rewards independently of CC usage fees](https://github.com/hyperledger-labs/splice/pull/2002/files)
 
 ## Copyright
 
