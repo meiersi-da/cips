@@ -15,10 +15,6 @@
 This CIP proposes to remove Canton Coin fees and adjust holding fees so that
 users do not have to pay fees when transferring Canton Coin and application
 developers can build applications without special code to deal with these fees.
-This CIP further proposes to have users collect their validator rewards directly
-instead of indirectly via the validator operator party
-and to adjust the CC fees for creating or renewing `TransferPreapproval` contracts so
-that short-lived preapprovals (expiry < 90 days) can be created without paying CC fees.
 Thus making Canton Coin more attractive for both users and application
 developers.
 
@@ -27,10 +23,11 @@ developers.
 
 The changes in this CIP are initially implemented as changes to the Amulet Rules configuration where possible,
 and changes to the Splice code where necessary.
-In the future, the Splice code might be further simplified by completely removing the logic for handling CC fees.
+In the future, the Splice code might be further simplified by completely removing the logic for charging
+CC fees on transfers.
 
 
-### Remove Canton Coin Fees
+### Remove Canton Coin fees
 
 Change the Amulet Rules configuration parameters as follows:
 
@@ -47,7 +44,7 @@ Change the Daml code for rewards issuance in `AmuletRules_Transfer` such that fe
 are issued independently of whether CC usage fees were charged.
 
 
-### Adjust Holding Fees
+### Adjust holding Fees
 
 Change the Daml code for Amulet such that no holding fees are charged when using a coin
 as an input to a transfer. Combined with the config changes to remove CC fees this
@@ -56,7 +53,7 @@ guarantees that the sum of coin inputs is always equal to the sum of coin output
 SVs retain the ability to expire coins after a time period proportional to the value.
 Concretely, they can continue to exercise the `Amulet_Expire` choice
 when the holding fees for a coin surpass the initial amount of the coin. These
-holding fees are determined as before using the formula:
+holding fees continue to be determined as before this CIP using the formula:
 ```
 holdingFees currentRound (ExpiringAmount initialAmount createdAtRound ratePerRound) =
   ratePerRound * (currentRound - createdAt)
@@ -65,31 +62,26 @@ where the `ExpiringAmount` parameters are stored on the `Amulet` contract and ar
 as part of the transfer that created the `Amulet` contract.
 
 
-### Switch to Direct Validator Reward Collection
+### Traffic purchase rewards are minted by purchasers
 
-Change the Daml code for `Amulet` as follows:
+Because we no longer charge any Canton Coin fees ``ValidatorRewardCoupon`` activity
+markers are only created for traffic purchases. We thus simplify the reward minting process
+so that the activity records from traffic purchases are
+used by the purchasers themselves to mint Canton Coin.
+Concretely:
 
 * Change `AmuletRules_Transfer` such that validator activity records can
   only be used to mint rewards by the user that generated them.
-* Deprecate `ValidatorRight` contracts and disable the choice `ValidatorRewardCoupon_ArchiveAsValidator` that was used
-  before this CIP by validator operator parties to archive validator activity records of their users as part of a transfer.
+* Deprecate `ValidatorRight` contracts and disable the choice `ValidatorRewardCoupon_ArchiveAsValidator`,
+  which was used before this CIP by validator operator parties to archive
+  validator activity records created for the CC usage fees paid
+  by the parties hosted on the validator node.
 * Change `ExternalPartySetupProposal` such that it no longer creates a `ValidatorRight` contract for the
   external party that is being set up.
 
-Change the automatic reward collection mechanism in the Splice Wallet to select
-only the user's own validator activity records instead of all validator activity records
-for which there exists a `ValidatorRight` listing the user as the validator operator party.
-
-
-### Adjust CC Fees for TransferPreapproval
-
-Introduce a new Amulet Rules configuration parameter `transferPreapprovalBaseDuration`
-set to a default value of 90 days.
-
-Change the code that charges the fee for creating or renewing a `TransferPreapproval` contract
-such that the existing time-based `transferPreapprovalFee` is only charged for
-the lifetime of the `TransferPreapproval` contract that is longer than the
-`transferPreapprovalBaseDuration`.
+Change the automatic reward minting mechanism in the Splice Wallet to select
+only the wallet user's own validator activity records instead of all validator activity records
+for which there exists a `ValidatorRight`.
 
 
 ### Adjust Splice App UIs
@@ -103,6 +95,8 @@ Concretely, this means:
 - Do not deduct holding fees from totals or coin balances in Splice App UIs.
   The only place where holding fees should be shown is in the transaction details
   for a transaction that expires a "dust coin".
+- Test that there are no division-by-zero problems due to the fee parameters
+  being set to zero.
 
 
 ## Motivation
@@ -118,42 +112,10 @@ the majority of burn on MainNet is due to traffic purchases and
 because app activity is expected to be tracked using explicit app activity
 markers (see [CIP-0047](../cip-0047/cip-0047.md)) instead of extra CC transfers.
 
-In the spirit of improving the usability of Canton Coin, this CIP further proposes
-to have users collect their validator rewards directly instead of indirectly via the validator operator party
-and to adjust the CC fees for creating or renewing `TransferPreapproval` contracts so
-that short-lived preapprovals can be created without paying CC fees.
+From a user perspective, the charging of fees on CC transfers makes CC unnattractive,
+as it results in a feeling of constant loss of value, and it makes accounting more challenging.
 
-The motivation is as follows:
-
-* Removing CC fees for creating short-lived `TransferPreapproval` contracts simplifies user setup.
-  In particular, it allows users to create a preapproval for receiving CC before they own CC.
-  The traffic cost of setting up a `TransferPreapproval` is significant enough to prevent abuse
-  for TransferPreapprovals that expire in 90 days or less,
-  so there is no need for an additional CC fee.
-
-* Switching to direct collection of validator rewards simplifies user setup, ensures traffic purchasers
-  get rewarded for their activity, and solves the one outstanding security issue (CC-3)
-  identified in the [Quantstamp security audit of Canton Coin](https://certificate.quantstamp.com/full/canton-coin-an-implementation-of-splice-amulet/d95ae8a5-34b5-4245-8afc-bfd5435e4632/index.html).
-
-  User setup is simplified because no `ValidatorRight` contracts need to be set up
-  to designate the validator operator party for a user.
-  Not having to manage `ValidatorRight` contracts is especially useful when migrating between validator operators,
-  or when [recovering CC balance from keys only](https://docs.dev.sync.global/validator_operator/validator_disaster_recovery.html#re-onboard-a-validator-and-recover-balances-of-all-users-it-hosts).
-
-  Switching from indirect to direct collection of validator rewards is
-  desired because setting the CC fees to zero means that all validator activity
-  records are due to traffic purchases. Direct collection thus results in the right tokenomics:
-  the purchaser gets rewarded instead of the validator operator party of the
-  validator node hosting the purchaser.
-
-
-
-## Rationale
-
-### Developer Challenges due to CC Fees
-
-We are aware of the following challenges that developers face when building applications
-that use Canton Coin:
+For developers, there are a number of challenges. Among others:
 
 * **Funding fees in multi-step workflows is cumbersome.** For example, a transfer-offer
   over a fixed amount of CC requires the sender to lock additional CC to pay for the CC fees
@@ -161,6 +123,9 @@ that use Canton Coin:
   so the sender has to lock more CC than they expect to be needed for the transfer. For example,
   token standard transfers of CC lock 4x the expected CC fees to ensure that the transfer can be executed
   even if the CC fees change in the meantime (see [code](https://github.com/hyperledger-labs/splice/blob/28d17694f42c4b9ff96b6487ab994d43e9879a3c/daml/splice-amulet/daml/Splice/Amulet/TwoStepTransfer.daml#L85-L89)).
+  This approach is problematic as it reduces capital efficiency, creates extra change coins that have to
+  be merged back into the user's balance, and might nevertheless lead to failed transfers in case the
+  CC fees or conversion rate change more than 4x.
 
 * **CC fee accounting is challenging.** CC is a financial asset, which requires accurate financial accounting of the CC balance of users.
   Thus any application using CC needs to implement logic to account for the CC fees and book them properly.
@@ -172,13 +137,16 @@ that use Canton Coin:
   to parse the actual CC transaction details and extract the CC fees from them. Likewise, providing a preview on
   the CC fees would also require the wallet to implement CC-specific logic to reimplment the CC fee calculation.
 
-* **Application design overhead** every application using CC needs to design the CC fee funding workflow, and decide
+* **Application design overhead** every application using CC needs to design a CC fee funding workflow in addition
+  to the actual value-adding application workflow, and decide
   how the fees are split between the different parties involved in the application. Furthermore, their UI design
   needs to account for the CC fees and show them to users in a way that is understandable. All of this is
   overhead that distracts developers from building the core functionality of their application.
 
 These are non-trivial challenges that do not seem worth the benefit of the extra burn pressure that CC fees create.
 
+
+## Rationale
 
 ### Burn on MainNet
 
@@ -196,7 +164,7 @@ worthwhile given the user and developer experience improvements
 that removing CC fees and adjusting holding fees brings.
 
 
-### Dust Coins and Holding Fees
+### Not completely removing holding fees
 
 We refrain from completely removing holding fees,
 as that would lead to ever-increasing operational costs for SVs
@@ -237,6 +205,35 @@ do not rely on very low value coin contracts to be live for a long time,
 which we expect to not be a problem in practice.
 
 
+### Traffic purchase rewards are minted by purchasers
+
+At a high-level this change is fixing a design mistake in the current implementation.
+Traffic purchase rewards are meant to rebate traffic purchasers for their activity.
+Given that anyone can purchase traffic for anybody else, it should be such that
+the purchaser mints the rewards for it.
+This was not the case so far because the minting flow for traffic purchase rewards
+was accidentally coupled with the minting flow that was built to reward
+validator operators for the CC usage of their users. With this CIP the latter
+flow becomes obsolete, and we can thus fix the design mistake with respect to
+minting traffic purchase rewards.
+
+At a code level, the core of the change is to remove the indirection of the
+minting of ``ValidatorRewardCoupon`` activity record via the ``ValidatorRight`` contracts.
+They represent the right of a validator operator party to mint
+``ValidatorRewardCoupon`` activity records recorded for user parties hosted on their node.
+Removing this indirection fixes the design mistake mention above, and has the following
+additional benefits:
+
+* It resolves the security vulnerability
+  "CC-3 - Malicious Users can Direct Some Validator Rewards to a Third-Party"
+  that was identified in the [Quantstamp security audit of Canton Coin](https://certificate.quantstamp.com/full/canton-coin-an-implementation-of-splice-amulet/d95ae8a5-34b5-4245-8afc-bfd5435e4632/index.html).
+
+* It simplifies user setup, as no `ValidatorRight` contracts need to be set up
+  to designate the validator operator party for a user.
+  Not having to manage `ValidatorRight` contracts is especially useful when migrating between validator operators,
+  or when [recovering CC balance from keys only](https://docs.dev.sync.global/validator_operator/validator_disaster_recovery.html#re-onboard-a-validator-and-recover-balances-of-all-users-it-hosts).
+
+
 ## Backwards compatiblity
 
 The configuration changes are backwards compatible by construction.
@@ -250,21 +247,18 @@ the actual holding fees for transactions from the transaction details, which wor
 Apps that attempt to predict holding fees, need to adjust their UIs and logic to
 not deduct holding fees when calculating CC transfer fees.
 
-The change to direct validator reward collection is not backwards compatible for apps
-that collect validator rewards. However, to the best of our knowledge, the only such app is the Splice wallet,
+The change for traffic purchase rewards to be minted by purchasers is not
+backwards compatible for apps that mint validator rewards.
+However, to the best of our knowledge, the only such app is the Splice wallet,
 which will be updated as part of implementing this CIP.
-
-The change to adjust the CC fees for `TransferPreapproval` is backwards compatible
-as it only changes the fee calculation in the existing choices.
-
 
 ## Reference implementation
 
 Reference implementations of the Daml changes for this CIP are available in the following set of stacked PRs:
-* [PR to adjust holding fees](https://github.com/hyperledger-labs/splice/pull/1722)
-* [PR to switch to direct validator reward collection](https://github.com/hyperledger-labs/splice/pull/1950/files)
-* [PR to adjust CC fees for `TransferPreapproval`](https://github.com/hyperledger-labs/splice/pull/1954/files)
+
 * [PR to issue featured app rewards independently of CC usage fees](https://github.com/hyperledger-labs/splice/pull/2002/files)
+* [PR to adjust holding fees](https://github.com/hyperledger-labs/splice/pull/1722)
+* [PR for traffic purchase rewards to be minted by purchasers](https://github.com/hyperledger-labs/splice/pull/1950/files)
 
 ## Copyright
 
@@ -273,4 +267,4 @@ This CIP is licensed under CC-1.0.
 ## Changelog
 
 * **2025-08-19:** - Draft ready for review
-
+* **2025-09-01:** - Removed the change wrt CC preapproval fees and rewrote the rationale and motivation for the change wrt traffic purchase rewards
