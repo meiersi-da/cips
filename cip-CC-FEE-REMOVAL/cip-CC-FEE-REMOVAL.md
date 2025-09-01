@@ -6,7 +6,7 @@
   License: CC0-1.0
   Status: Draft
   Type: Tokenomics
-  Created: 2025-08-19
+  Created: 2025-09-01
   Approved:
 </pre>
 
@@ -60,28 +60,6 @@ holdingFees currentRound (ExpiringAmount initialAmount createdAtRound ratePerRou
 ```
 where the `ExpiringAmount` parameters are stored on the `Amulet` contract and are set
 as part of the transfer that created the `Amulet` contract.
-
-
-### Traffic purchase rewards are minted by purchasers
-
-Because we no longer charge any Canton Coin fees ``ValidatorRewardCoupon`` activity
-markers are only created for traffic purchases. We thus simplify the reward minting process
-so that the activity records from traffic purchases are
-used by the purchasers themselves to mint Canton Coin.
-Concretely:
-
-* Change `AmuletRules_Transfer` such that validator activity records can
-  only be used to mint rewards by the user that generated them.
-* Deprecate `ValidatorRight` contracts and disable the choice `ValidatorRewardCoupon_ArchiveAsValidator`,
-  which was used before this CIP by validator operator parties to archive
-  validator activity records created for the CC usage fees paid
-  by the parties hosted on the validator node.
-* Change `ExternalPartySetupProposal` such that it no longer creates a `ValidatorRight` contract for the
-  external party that is being set up.
-
-Change the automatic reward minting mechanism in the Splice Wallet to select
-only the wallet user's own validator activity records instead of all validator activity records
-for which there exists a `ValidatorRight`.
 
 
 ### Adjust Splice App UIs
@@ -186,52 +164,24 @@ coin contracts with higher values; and thus lowers the operating costs of
 the SV nodes spent on maintaining these coin contracts.
 
 We expect the mechanism to be de-facto transparent to users, as
-even a coin contract with a value of 0.01 $ will be live for
-3.65 days with a `holdingFeeRate` of `1 $/year`. Thus it is unlikely
+even a coin contract with a value of 0.01 \$ will be live for
+3.65 days with the `holdingFeeRate` of `1 $/year`. Thus it is unlikely
 that there is contention between transactions by coin owners and SVs over the
 expiration of a coin contract. Furthermore, requiring users to
 consolidate long-term holdings in coin contracts with a value
-of 10 $ or higher so that they are live for at least 10 years seems
-reasonable as well.
+of 10 \$ or higher so that they are live for at least 10 years seems
+reasonable and beneficial for the network.
 
-Likewise for developers, the key change in this CIP is that holding fees are not charged
+For developers, the key change in this CIP is that holding fees are not charged
 when transferring coins, but only explicitly on expired coin contracts.
 The explicit charging via the `Amulet_Expire` choice makes accounting for holding fees
-simple, as exactly the value of the coin contract is charged as holding fees.
+simple in their apps, as exactly the value of the coin contract is charged as holding fees;
+and there's an explicit dedicated transaction that signals these fees being charged.
 Furthermore, not charging any CC fees on transfers means that developers no longer
 have to manage funding CC fees when implementing multi-step
 workflows that transfer coins. Developers only have to ensure that workflows
 do not rely on very low value coin contracts to be live for a long time,
 which we expect to not be a problem in practice.
-
-
-### Traffic purchase rewards are minted by purchasers
-
-At a high-level this change is fixing a design mistake in the current implementation.
-Traffic purchase rewards are meant to rebate traffic purchasers for their activity.
-Given that anyone can purchase traffic for anybody else, it should be such that
-the purchaser mints the rewards for it.
-This was not the case so far because the minting flow for traffic purchase rewards
-was accidentally coupled with the minting flow that was built to reward
-validator operators for the CC usage of their users. With this CIP the latter
-flow becomes obsolete, and we can thus fix the design mistake with respect to
-minting traffic purchase rewards.
-
-At a code level, the core of the change is to remove the indirection of the
-minting of ``ValidatorRewardCoupon`` activity record via the ``ValidatorRight`` contracts.
-They represent the right of a validator operator party to mint
-``ValidatorRewardCoupon`` activity records recorded for user parties hosted on their node.
-Removing this indirection fixes the design mistake mention above, and has the following
-additional benefits:
-
-* It resolves the security vulnerability
-  "CC-3 - Malicious Users can Direct Some Validator Rewards to a Third-Party"
-  that was identified in the [Quantstamp security audit of Canton Coin](https://certificate.quantstamp.com/full/canton-coin-an-implementation-of-splice-amulet/d95ae8a5-34b5-4245-8afc-bfd5435e4632/index.html).
-
-* It simplifies user setup, as no `ValidatorRight` contracts need to be set up
-  to designate the validator operator party for a user.
-  Not having to manage `ValidatorRight` contracts is especially useful when migrating between validator operators,
-  or when [recovering CC balance from keys only](https://docs.dev.sync.global/validator_operator/validator_disaster_recovery.html#re-onboard-a-validator-and-recover-balances-of-all-users-it-hosts).
 
 
 ## Backwards compatiblity
@@ -247,18 +197,12 @@ the actual holding fees for transactions from the transaction details, which wor
 Apps that attempt to predict holding fees, need to adjust their UIs and logic to
 not deduct holding fees when calculating CC transfer fees.
 
-The change for traffic purchase rewards to be minted by purchasers is not
-backwards compatible for apps that mint validator rewards.
-However, to the best of our knowledge, the only such app is the Splice wallet,
-which will be updated as part of implementing this CIP.
-
 ## Reference implementation
 
 Reference implementations of the Daml changes for this CIP are available in the following set of stacked PRs:
 
 * [PR to issue featured app rewards independently of CC usage fees](https://github.com/hyperledger-labs/splice/pull/2002/files)
 * [PR to adjust holding fees](https://github.com/hyperledger-labs/splice/pull/1722)
-* [PR for traffic purchase rewards to be minted by purchasers](https://github.com/hyperledger-labs/splice/pull/1950/files)
 
 ## Copyright
 
@@ -266,5 +210,4 @@ This CIP is licensed under CC-1.0.
 
 ## Changelog
 
-* **2025-08-19:** - Draft ready for review
-* **2025-09-01:** - Removed the change wrt CC preapproval fees and rewrote the rationale and motivation for the change wrt traffic purchase rewards
+* **2025-09-01:** Draft ready for review
