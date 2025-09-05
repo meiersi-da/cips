@@ -15,7 +15,7 @@
 This CIP proposes to remove Canton Coin fees and adjust holding fees so that
 users do not have to pay fees when transferring Canton Coin and application
 developers can build applications without special code to deal with these fees.
-Thus making Canton Coin more attractive for both users and application
+This will make Canton Coin, and the Global Synchronizer, more attractive for both users and application
 developers.
 
 
