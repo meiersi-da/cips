@@ -64,17 +64,56 @@ as part of the transfer that created the `Amulet` contract.
 
 ### Adjust Splice App UIs
 
-Change UIs to reflect the removal of Canton Coin fees and the adjustment of holding fees.
-Concretely, this means:
+Change UIs to reflect the removal of Canton Coin fees and the adjustment of holding fees,
+as shown in the screenshots below.
 
-- Remove references to Canton Coin fee parameters from Splice App UIs,
-  except for UIs that show the internal configuration of the Amulet Rules.
-- Ensure the UI elements only show non-zero fee values.
-- Do not deduct holding fees from totals or coin balances in Splice App UIs.
-  The only place where holding fees should be shown is in the transaction details
-  for a transaction that expires a "dust coin".
-- Test that there are no division-by-zero problems due to the fee parameters
-  being set to zero.
+#### Change Scan UI
+
+From the current state
+
+![Current fees display in scan](images/scan_fees_old.png)
+
+to this new state
+
+![New fees display in scan](images/scan_fees_new.png)
+
+Note the change in the holding fees explanation to
+
+> A fixed fee for maintaining each active Canton Coin record, computed per round, but only charged if it surpasses the Coin amount.
+
+#### Change Splice Wallet UI
+
+From
+
+![Current fees display in splice wallet](images/wallet_fees_old.png)
+
+to
+
+![New fees display in splice wallet](images/wallet_fees_new.png)
+
+The only change visible in the screenshot is the explanation of the available balance.
+However, the UI must also be changed such that
+holding fees are not eagerly deducted from the available balance.
+This is no longer required, as holding fees
+are no longer charged when transferring coins.
+
+No change is required in the Splice Wallet UI to show holding fees getting charged
+when the SVs call the `Amulet_Expire` choice.
+This is not a new choice, and
+the current Splice Wallet UI will display it in the transaction history.
+
+
+#### Backwards compatibility
+
+This CIP will be voted in by the SVs as a Daml version change that introduces the
+holding fees adjustment and a fees config change.
+A single Splice release must thus support both the old and new holding fees logic.
+The UI should thus check whether the Daml version change has been executed,
+and only use the new display logic if it has.
+
+Furthermore, the CC fees displays should be adjusted such that they are hidden when the fees are zero.
+Thereby adjusting themselves automatically once the zero fees are voted in
+via a config change.
 
 
 ## Motivation
@@ -197,12 +236,11 @@ the actual holding fees for transactions from the transaction details, which wor
 Apps that attempt to predict holding fees, need to adjust their UIs and logic to
 not deduct holding fees when calculating CC transfer fees.
 
+
 ## Reference implementation
 
-Reference implementations of the Daml changes for this CIP are available in the following set of stacked PRs:
+Reference implementations of the Daml changes for this CIP is available in [this PR](https://github.com/hyperledger-labs/splice/pull/2138).
 
-* [PR to issue featured app rewards independently of CC usage fees](https://github.com/hyperledger-labs/splice/pull/2002/files)
-* [PR to adjust holding fees](https://github.com/hyperledger-labs/splice/pull/1722)
 
 ## Copyright
 
@@ -210,4 +248,4 @@ This CIP is licensed under CC-1.0.
 
 ## Changelog
 
-* **2025-09-01:** Draft ready for review
+* **2025-09-05:** Draft ready for review
