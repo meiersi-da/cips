@@ -20,7 +20,10 @@ The specification of this CIP consists of three parts:
 
 1. **Credential Registry APIs**: define standard APIs for storing, retrieving, and using Canton Network credentials.
 2. **DSO Credentials Registry**: specifies how these APIs are implemented in a decentralized registry run across the SV nodes.
-3. **Standardized Application and Metadata Discovery:** specifies how these APIs are used to standardize the discovery of specific kinds of applications on the network and their metadata. In particular, this CIP standardizes how to discover the off-ledger APIs of credential registries, the UIs of credential issuers, and the off-ledger APIs of [CIP-56 asset registries](https://github.com/global-synchronizer-foundation/cips/blob/main/cip-0056/cip-0056.md#off-ledger-api-discovery-and-access).
+3. **Standardized Application and Metadata Discovery:**
+   specifies how these APIs are used to standardize the discovery of specific
+   kinds of applications on the network and their metadata
+   like for example the off-ledger APIs of [CIP-56 asset registries](https://github.com/global-synchronizer-foundation/cips/blob/main/cip-0056/cip-0056.md#off-ledger-api-discovery-and-access).
 
 We provide details on each of these parts in the following subsections.
 
@@ -61,7 +64,7 @@ The Daml APIs mediate the on-ledger interactions of the different applications w
 
 The schema of credentials is defined by the following Daml code (copied from [Draft PR](https://github.com/hyperledger-labs/splice/pull/3416/changes#diff-808147bf36f1c087a42b92d67d2021c2ca203076cc0e3b6a31f2ccc60497a34d)):
 
-```daml
+```haskell
 -- | A set of claims that define a credential analogous to W3C Verifiable Credentials.
 data Claims = Claims with
    values : TextMap Text
@@ -233,11 +236,17 @@ The APIs are implemented as follows:
 
 ## Standardized Application and Metadata Discovery
 
-Together the APIs defined in this CIP and the DSO Credentials Registry enable defining standard ways to discover applications and metadata about them. It works by a CIP defining claim keys within the CIP’s namespace together with their purpose and expected usage.
+Together the APIs defined in this CIP and the DSO Credentials Registry enable
+defining standard ways to discover applications and metadata about them.
+It works by a CIP defining claim keys within the CIP’s namespace together with
+their purpose and expected usage.
 
 This CIP defines the following keys:
 
-- `cip-TBD/credential-registry-urls`: serves to discover the off-ledger credential registry API of a specific credential registry admin party `admin`. It is published by `admin` using a self-published credential in the DSO Credential Registry. It specifies a comma-separated list of URLs that serve the credential registry HTTP API for party `admin`. Multiple URLs are supported for decentralized registries so that clients can implement BFT reads.
+- `cip-TBD/credential-registry-urls`: serves to discover the off-ledger credential registry API of a specific credential registry admin party `admin`.
+  It is published by `admin` using a self-published credential in the DSO Credential Registry.
+  It specifies a comma-separated list of URLs that serve the credential registry HTTP API for party `admin`.
+  Multiple URLs are supported for decentralized registries, so that clients can implement BFT reads.
 
 - `cip-TBD/credential-issuer-app-url`: serves to discover the dApp of a specific credential issuer party `issuer`. It is self-published by the `issuer` party in the DSO Credential Registry. The idea is that the users' wallets read the user's credentials from their node, and then query the DSO Credential Registry using `cip-TBD/credential-issuer-app-url` to discover the URL for the issuer-specific dApp to manage the user's credentials. We expect the wallet UI to offer a redirect to that dApp. These redirects to this URL may specify a `credential-contract-id=<contract-id>` query parameter to focus on a particular credential. Whether to offer such a UI is optional for credential issuers.
 
@@ -247,12 +256,6 @@ This CIP defines the following keys:
 (property="cip-TBD/is-featured-app", subject="<holder>", value="")
 ```
 
-This CIP also enables finishing the implementation of [off-ledger API discovery from CIP-56](https://github.com/global-synchronizer-foundation/cips/blob/main/cip-0056/cip-0056.md#off-ledger-api-discovery-and-access) by defining the following key:
-
-- `cip-56/asset-registry-urls`: serves to discover the off-ledger asset registry API of a specific asset registry admin party `admin`. It is published by `admin` using a self-published credential in the DSO Credential Registry. It specifies a comma-separated list of URLs that serve the credential registry HTTP API for party `admin`. Multiple URLs are supported for decentralized registries so that clients can implement BFT reads.
-
-Note that CIP-56 originally specified the key splice.lfdecentralizedtrust.org/registryUrls for this purpose. However there is no implementation thereof. We thus took this as an opportunity to choose cip-56/asset-registry-urls for consistency here. We plan to adapt the CIP-56 text accordingly once this CN credential standard has been adopted.
-
 In general, the expectation is that all properties in a credential’s claims have the form `namespace/property` and the namespaces are one of the following:
 
 1. `cip-<nr>`: for properties defined in a CIP
@@ -260,7 +263,8 @@ In general, the expectation is that all properties in a credential’s claims ha
 
 We expect future CIPs to define additional well-known properties for discovering applications and metadata of a particular kind.
 
-### Discovering the DSO Credential Registry and Canton Coin Registry
+
+### Discovering the DSO Credential Registry
 
 The above properties will be used to make the DSO Credential Registry discoverable by making the `dso` party publish a credential with issuer = holder = admin = `dso` and claim
 
@@ -272,17 +276,6 @@ The above properties will be used to make the DSO Credential Registry discoverab
 
 in the DSO Credential Registry. The Scan URLs are the ones published per network here: [https://canton.foundation/sv-network-status/](https://canton.foundation/sv-network-status/).
 
-Analogously, the `dso` party will also publish a credential with issuer = holder = admin = `dso` and claim
-
-```text
-(property="cip-56/asset-registry-urls",
- subject="<dso>",
- value="<scan-url1>/credential-registry/v1/,...,<scan-urlN>/credential-registry/v1/")
-```
-
-in the DSO Credential Registry.
-
-We expect other asset admins to also make use of that functionality to enable wallets to discover the off-ledger API of an asset admin directly from the network.
 
 ## Motivation
 
@@ -309,17 +302,14 @@ The problem of service discovery on the Canton Network is about how to resolve t
 
 A typical example is the problem of wallets having to resolve the registry `admin` party-id on `Holding` contracts owned by their user to the [URL of the off-ledger registry API](https://github.com/global-synchronizer-foundation/cips/blob/main/cip-0056/cip-0056.md#off-ledger-api-discovery-and-access). The wallet needs to know this URL to read token metadata like total supply and to get the required data for transferring `Holding`s.
 
-As shown in [Discovering the DSO Credential Registry and Canton Coin Registry](#discovering-the-dso-credential-registry-and-canton-coin-registry), storing the URLs of services associated with a party under a well-known claim in a self-published credential in the DSO Credential Registry solves this problem.
+As shown in [Discovering the DSO Credential Registry](#discovering-the-dso-credential-registry), storing the URLs of services associated with a party under a well-known claim in a self-published credential in the DSO Credential Registry solves this problem.
 
 ##### Application Discovery
 
-The credentials used by asset registry operators to self-publish the URLs of their off-ledger APIs can also be used to discover all assets registries by listing all self-published credentials in the DSO Credential Registry with key `cip-56/asset-registry-urls`.
-
-All assets available on the network can then be discovered by listing the instruments in each of these registries using the `GET <registry-url>/registry/metadata/v1/instruments` [endpoint](https://github.com/hyperledger-labs/splice/blob/82a11c72f42da70de44b1d1fd7399dd417c73a7b/token-standard/splice-api-token-metadata-v1/openapi/token-metadata-v1.yaml#L31) defined in CIP-56.
-
-Analogous approaches can be used to discover other applications offering standardized services.
-
-We expect that generalized application discovery is handled as part of profile publication via self-published credentials as explained below. Checking whether an application is featured by the Canton Foundation can be done by querying for the corresponding credential issued by the `dso` party with property `cip-TBD/is-featured-app`.
+The list of all featured applications can be retrieved by querying for the
+corresponding credential issued by the `dso` party with property
+`cip-TBD/is-featured-app`.
+Fetching the public credentials held by their application provider party then allows discovering further meta information about the application.
 
 ### Profile Publication
 
