@@ -219,9 +219,28 @@ The corresponding HTTP endpoints work by exposing the list of synchronizers whic
 
 ## DSO Credential Registry
 
-A decentralized credential registry is implemented as an extension of the Amulet Name Service (ANS) app run by the SV nodes. It implements all the APIs defined above side-by-side with the existing ANS 1.0 APIs.
+A decentralized credential registry is implemented as an extension of the Amulet Name Service (ANS) app run by the SV nodes.
+It implements all the APIs defined above side-by-side with the existing ANS 1.0 APIs.
 
-There is no CC payment required for creating credential records in the registry. Instead, the registry expires the records within 90 days, so that the traffic cost of creating and renewing them covers their storage cost.
+By default, there is no CC payment required for creating credential records in the registry.
+Instead, the registry expires the records within 90 days (configurable by SV voting),
+so that the traffic cost of creating and renewing them covers their storage cost.
+
+### Extended Expiration Durations
+
+The registry optionally supports extending the expiration duration of records by more than 90 days by burning a CC fee (default 1 $/year, configurable by SV voting).
+This burn is executed by performing a CC transfer to the `cip-112/burn` account defined in
+[CIP-112](https://github.com/canton-foundation/cips/blob/main/cip-0112/cip-0112.md#4321-special-account-identifiers-for-mint-and-burn) (Token Standard V2) with the following two extra arguments of `V2.TransferFactory_Transfer`:
+
+- `cip-TBD/extend-credential-expiry-to` set to the new expiration time in `extraArgs.meta`
+- `cip-TBD/credential-contract-id` set to the contract-id of the credential in `extraArgs.context`
+
+The payment requires authorization from the sender of the funds and from at least one of the credential issuer or holder.
+
+This authorization policy is chosen to allow credential issuance apps to extend the expiration of a credential on behalf of the issuer or holder, as part of an app's workflow.
+For example by creating the credential and extending its expiration in the same
+transaction.
+
 
 ### Technical Details
 
@@ -233,6 +252,14 @@ The APIs are implemented as follows:
 2. The Scan app backend running on SV nodes implements the [openapi/credential-registry-v1.yaml](https://github.com/hyperledger-labs/splice/pull/3416/changes#diff-a73145dfdb26770f01b5fc0a9f35c7c34f067584acb6ec16de7e82040df6f835), so that any Scan app can be used to interact with the credentials registry.
 3. The Scan app proxy served by the validator app implements the [openapi/credential-registry-v1.yaml](https://github.com/hyperledger-labs/splice/pull/3416/changes#diff-a73145dfdb26770f01b5fc0a9f35c7c34f067584acb6ec16de7e82040df6f835), calling out to multiple Scan apps and comparing the results to implement BFT reads.
 4. The SV app is extended with automation ensuring that there is exactly one `AnsCredentialRecord` self-published by the `dso` party, which announces the URLs of the Scan apps serving the off-ledger APIs of the DSO Credential Registry.
+
+Token Standard V1 wallets can be used to burn CC to extend the duration of
+credentials by encoding the special receipt account and the extension parameters as follows:
+
+- set `transfer.receiver` to the special `cip-112_no-owner::1220000000000000000000000000000000000000000000000000000000000000abcd` party
+- set `cip-112/receiver.id` to `cip-112/burn` in `transfer.meta`
+- set the other two arguments `cip-TBD/extend-credential-expiry-to` and `cip-TBD/credential-contract-id` as explained above
+
 
 ## Standardized Application and Metadata Discovery
 
