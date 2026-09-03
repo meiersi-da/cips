@@ -252,7 +252,7 @@ Assume that the staking app `S` authorizes substitutions on their own using just
 
 The app now adds a feature to hand back control over a lock to the lock owner. The app can execute this change of control by getting `A` to propose this substitution:
 
-*  Substitution proposal with
+* Substitution proposal with
   * substitution target:
     * FA lock with
       * lock owner: `A`
@@ -347,7 +347,7 @@ Assume that `A` would like to stake an additional 5k CC. They cannot do so by cr
 
 This topup request will immediately succeed and result in:
 
-*  FA Lock with:
+* FA Lock with:
   * contract-id: `cid1`
   * lock owner: `A`
   * lock subject: `X`
@@ -911,5 +911,6 @@ Aug 28, 2026: Initial draft created.
 Sep 3, 2026: Incorporated review feedback:
 
 * automate termination of SV lock-up period
-* aggregate SV weight across multiple nodes operated by the same SV\\change “withdrawal controllers” to vesting controllers
+* aggregate SV weight across multiple nodes operated by the same SV
+* change "withdrawal controllers" to vesting controllers
 * switch to specifying substitution targets by key instead of by contract-id.
