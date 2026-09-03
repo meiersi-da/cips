@@ -9,7 +9,7 @@ Created: Aug 10, 2026
 License: CC0-1.0
 </pre>
 
-# **Abstract**
+# Abstract
 
 This CIP serves to align the stakeholders of [CIP-0105](https://github.com/canton-foundation/cips/blob/main/cip-0105/cip-0105.md) (SV Locking) and [CIP-0116](https://github.com/canton-foundation/cips/blob/main/cip-0116/cip-0116.md) (FA Locking) on the implementation of on-chain enforcement of SV and FA locking. It is motivated by the fact that the concrete mechanisms chosen to implement locking have a material impact on the operability of SVs, FAs, and staking apps.
 
@@ -21,7 +21,7 @@ The proposed implementation closely follows the high-level guidance laid out by 
 
 The CIP further clarifies the technical integration between wallets and locks; and it proposes incremental delivery and migration paths. Thereby creating clarity for the work required from the stakeholders to land on-chain enforcement of SV and FA locks on MainNet.
 
-# **Specification**
+# Specification
 
 This specification explains the concrete mechanisms chosen to implement on-chain enforcement of [CIP-0105](https://github.com/canton-foundation/cips/blob/main/cip-0105/cip-0105.md) (SV Locking) and [CIP-0116](https://github.com/canton-foundation/cips/blob/main/cip-0116/cip-0116.md) (FA Locking). It is split into three sections: high-level specification, incremental delivery plan, and technical specification.
 
@@ -31,9 +31,9 @@ The [incremental delivery plan](#incremental-delivery-plan) specifies how the fu
 
 The [technical specification](#technical-specification) builds on the high-level specification. It clarifies technical aspects where required to clarify the interaction between different systems or applications.
 
-## **High-Level Specification**
+## High-Level Specification
 
-### **Terminology**
+### Terminology
 
 Apps:
 
@@ -56,7 +56,7 @@ Governance locks:
 * **lock subject**: the name of the SV rights owner or FA party whose locking requirements the governance lock contributes to.
 * **vesting lock**: a representation of a CC holding whose amount was locked as a governance lock, but is now unlocking in a vested fashion and no longer counts toward the fulfilment of locking requirements.
 
-### **Wallet Integration**
+### Wallet Integration
 
 Two wallet integration options are supported:
 
@@ -67,15 +67,15 @@ The full feature integration requires TSv2 support, as the TSv1 APIs are not exp
 
 We expect the wallet ecosystem to migrate over time to full feature integrations based on the TSv2 APIs. Some might even go further and build dedicated UIs for interacting with governance locks. We further expect the TSv2 APIs to be used by all apps (e.g., staking apps) that want to interact with governance locks.
 
-#### **Extra Parameters**
+#### Extra Parameters
 
 Extra parameters and data are communicated over the TSv2 APIs via metadata keys prefixed by `cip-<xxx>/` where `<xxx>` represents the CIP number that will be assigned to this implementation CIP. Communicating this data via metadata keys allows reading and setting them via the generic metadata support of wallets. See the section on [Support for Extended Metadata](#support-for-extended-metadata) for details on how wallets are expected to provide this support.
 
-### **Lock Lifecycle**
+### Lock Lifecycle
 
 The following sections describe the lock-life cycle based on the TSv2 APIs. See the final section, titled [Compatibility Mode Lifecycle](#compatibility-mode-lifecycle), for details on how the lock lifecycle works when using the compatibility mode based on TSv1 two-step transfers.
 
-#### **Creation**
+#### Creation
 
 All locks are created by the lock owner creating a TSv2 allocation with special metadata that identifies it as a governance lock. The metadata specifies the lock type (FA or SV), the lock subject, and the custom controllers for the unlock, withdraw and substitution actions explained below.
 
@@ -103,7 +103,7 @@ The substitution controllers and the unlock controllers are the same. They are c
 
 The vesting controllers control the disbursal of vesting funds, which can happen via withdrawals or substitutions. In this example, they are chosen such that `S` can automate the withdrawal or substitution of vested funds on behalf of `A` without an extra delegation contract, but `A` can also drive substitutions and withdrawals themselves.
 
-#### **Unlocking**
+#### Unlocking
 
 The parties specified as unlock controllers on a governance lock can request unlocking of (part of) a lock. They do so using their TSv2 wallet to request withdrawing the allocation representing the lock. Once enough unlock controllers have requested the unlocking, the lock is converted into a vesting lock with the vesting schedule parameters taken from the SV and FA lock vesting parameters managed via SV governance.
 
@@ -174,7 +174,7 @@ Continuing the above example, assume that `S` automates the withdrawal of vested
 
 Note that the amount vesting and the vesting start are changed to represent the remaining vesting amount and its remaining vesting period. This representation works well with substitution, as can be seen in [this example](#example-substitution-of-a-vesting-lock).
 
-#### **Substitution**
+#### Substitution
 
 Funds owners can create a proposal to use their funds to substitute some (or all) of the locked amount of an existing lock. Substitution works for all types of locks independently of whether they are vesting or not. Substitutions of vesting locks are approved by the vesting controllers, while substitutions of non-vesting locks are approved by the substitution controllers. The new lock to be created is specified as part of the substitution. While it must have the same type as the existing lock, it can have different controllers and [metadata](#metadata-usage).
 
@@ -320,7 +320,7 @@ Assume further the `S` and `A` jointly accept the proposal, which results in:
 
 Note that not only the amount changed, but also the vesting controllers as specified in the substitution proposal.
 
-#### **Topups, Merges, and Minting Locked SV Rewards**
+#### Topups, Merges, and Minting Locked SV Rewards
 
 A topup allows a lock owner to deposit additional funds in an existing lock. They can do so without any extra authorization. They can fund topups using three funding sources: liquid CC, unminted SV rewards, or existing locks with the same attributes as the topup target.
 
@@ -415,7 +415,7 @@ The request will immediately succeed and result in:
   * amount: `<current-amount> + <round r issuance per SV weight> * <example-weight> * 0.7` CC
 * payout of liquid CC of `<round r issuance per SV weight> * <example-weight> * 0.3`
 
-#### **Minimum Lock Amount**
+#### Minimum Lock Amount
 
 Similar to lot sizes in TradFi, FA and SV locks must lock a minimum amount configured by SV voting (default 10k CC). This minimum amount serves to avoid users creating “dust locks” whose management overhead exceeds their value.
 
@@ -423,7 +423,7 @@ The minimum amount restriction is enforced on all actions that create additional
 
 Note that new SVs will need to lock the minimum lock amount once they are onboarded to avoid [losing their SV weight as shown in this example](#example-temporary-loss-of-reward-weight).
 
-#### **Compatibility Mode Lifecycle**
+#### Compatibility Mode Lifecycle
 
 Funds owners whose wallets do not support the TSv2 allocation APIs can use TSv1 two-step transfers to create a lock whose unlocking, substitution, and withdrawal is controlled by the funds owner itself.
 
@@ -456,7 +456,7 @@ The limitations of the compatibility mode are the following:
 5. extra metadata must be provided to guarantee a 24h prepare-submission delay
   (see [Compatibility Mode Details](#compatibility-mode-details))
 
-### **Automatic Enforcement of FA Underlocking**
+### Automatic Enforcement of FA Underlocking
 
 We propose to implement automatic enforcement of FA underlocking using the following three mechanisms, which we explain below:
 
@@ -473,7 +473,7 @@ To increase operational flexibility, we propose to enforce underlocks with a 7 d
 
 Underlocks are detected by SV automation that regularly computes the totals of all non-provisional FA locks, and compares them against the required thresholds. If an underlock is detected, then the automation triggers the on-chain action that implements the enforcement described above.
 
-#### **Example: Suspension and Recovery**
+#### Example: Suspension and Recovery
 
 Assume asset provider `X` has the following FA right and FA lock:
 
@@ -526,13 +526,13 @@ A few seconds later at `t2`, the SV node automation detects the underlock recove
 
 Once `t2 + 24h` is past, the FA right will again create featured app markers and be respected in the computations for traffic-based app activity records for rounds that open after this time.
 
-#### **Example: Permanent Loss**
+#### Example: Permanent Loss
 
 Assume that in the above example `X` does not manage to get somebody to lock the 5M CC before `t1 + 7 days`. In that case, SV automation will trigger the archival of the FA right, and its loss becomes permanent.
 
 No automatic unlocking of funds happens. However `X` can unlock their remaining 20M CC, which will then result in a 60 day Vesting Lock.
 
-### **Automated SV Reward Locking**
+### Automated SV Reward Locking
 
 We propose to extend the reward minting automation of validator nodes to mint a percentage of SV rewards directly in locked form by [topping up an existing lock](#topups-merges-and-minting-locked-sv-rewards). Concretely, we expect validator nodes to accept a configuration as shown in the following example:
 
@@ -566,22 +566,22 @@ For the minting automation to work for `ExampleSV1`, it must hold that:
 
 If all of these conditions are met, then every minting round 70% of the SV rewards received by `alice::1220abc...def` will be added to the existing lock, and the remaining 30% will be minted as liquid CC owned by `alice::1220abc...def`.
 
-#### **Example: Single Beneficiary Configuration**
+#### Example: Single Beneficiary Configuration
 
 We expect SVs with a single beneficiary party to run this minting automation with the target percentage set to the tier they are aiming for; and adjust that percentage once a year when the tier locking requirement is reduced.
 
-#### **Example: Multi-Beneficiary Configurations**
+#### Example: Multi-Beneficiary Configurations
 
 SVs with multiple beneficiaries have two kinds of options for how to automate the locking of newly minted SV rewards. They can either configure their beneficiaries such that there's a single beneficiary that locks all their required SV rewards, or they can ask each beneficiary to lock the required percentage.
 
-### **Termination of the SV Lock-Up Requirement**
+### Termination of the SV Lock-Up Requirement
 
 [CIP-105](https://github.com/canton-foundation/cips/blob/main/cip-0105/cip-0105.md#5-sv-locking-and-sv-weight-schedule) requires that “The Lock-up requirement will automatically terminate 30 days after the date of next step down in rewards/halving currently forecast to occur late summer 2029.” We propose to implement that as follows:
 
 1. Add a new configuration parameter `svLockingDeactivatesAfter : RelTime` configurable by SV voting. This time is measured relative to the opening of the very first round of the network. Its default value is 5 years and 30 days, as the next halving happens 5 years after network start (see the [Minting Curve in the Canton Coin whitepaper](https://www.canton.network/hubfs/Canton%20Network%20Files/Documents%20\(whitepapers%2C%20etc...\)/Canton%20Coin_%20A%20Canton-Network-native%20payment%20application.pdf)).
 2. Change the unlock and withdrawal operations for SV locks such that they unlock the full amount of funds after that timepoint.
 
-### **Automatic Enforcement of SV Underlocking**
+### Automatic Enforcement of SV Underlocking
 
 We propose to add SV node automation that automatically enforces the temporary and permanent loss of SV weight per the rules defined in [CIP-105](https://github.com/canton-foundation/cips/blob/main/cip-0105/cip-0105.md#6-under-locked-sv-weight-enforcement). The implementation requires building on the proposal  from IntellectEU to move [SV weight management fully on-ledger](https://docs.google.com/document/d/1L1cM3m8_8R7x7Vr6vTolwDgS9x2pyFQsaG1gGci3lLE/edit?tab=t.0#heading=h.j1o9vy5fqmrz). The implementation further requires:
 
@@ -593,7 +593,7 @@ We propose to add SV node automation that automatically enforces the temporary a
 
 The bulk of this implementation consists of complex, but purely technical changes to SV node automation, the Daml code for DSO governance, and the Daml code for SV reward coupon creation and minting. From a business-level perspective, the key aspect is how the grace periods work, which we illustrate in the examples below.
 
-#### **SV Right Owner to SV Node Operator Relationship**
+#### SV Right Owner to SV Node Operator Relationship
 
 Automated enforcement relies on the [change to move SV weight management on-chain](https://docs.google.com/document/d/1L1cM3m8_8R7x7Vr6vTolwDgS9x2pyFQsaG1gGci3lLE/edit?tab=t.0#heading=h.j1o9vy5fqmrz). That change introduces an on-chain representation of all SV rights, which records both the SV weight for a given SV right, and the SV node operator hosting the right and driving SV reward coupon creation for it.
 
@@ -609,7 +609,7 @@ One configuration option for the nodes operated by Digital Asset is as follows: 
 
 In case of an underlock, the enforcement will happen on-chain by modifying both SV rights.
 
-#### **Example: Temporary Loss of Reward Weight**
+#### Example: Temporary Loss of Reward Weight
 
 Assume there’s an SV right owner named `ExampleSV` onboarded with weight 10. Assume further that they use party `A` to receive rewards, and that they were onboarded after on-chain SV locking enforcement was activated. Their reward state is:
 
@@ -673,7 +673,7 @@ The SV node automations detect that `ExampleSV` qualifies for Tier 1, and update
 
 Thus the reward adjustment schedules are cleared and `ExampleSV` starts earning full rewards again.
 
-#### **Example: Permanent Loss of Reward Weight**
+#### Example: Permanent Loss of Reward Weight
 
 Assume that in the prior example, the `ExampleSV` already had lifetime earnings of 1M CC and their initial rewards state is:
 
@@ -738,7 +738,7 @@ After `t1 + 30 days`, the 60% weight reduction becomes permanent. We can see thi
 
 Note that both the temporary adjustment deadlines and the permanent deadline that is still in the future are removed. However the permanent deadline that is already in the past remains effective, and the `ExampleSV` thus permanently only earns 60% of their SV weight.
 
-## **Incremental Delivery Plan**
+## Incremental Delivery Plan
 
 We propose an incremental delivery that focuses first on on-chain enforcement of locks and then on improving the UX for maintaining these locks. Concretely, we propose the following increments of the features specified in the [High-Level Specification](#high-level-specification):
 
@@ -752,7 +752,7 @@ We propose an incremental delivery that focuses first on on-chain enforcement of
 8. **Termination of SV lock-up requirements:** allow SVs to vote on terminating the SV lock-up requirement upon which all funds can be fully withdrawn without any vesting from both SV locks and vesting SV locks.
 9. **Automatic enforcement of SV underlocking:** SV lifetime rewards are tracked on chain and used to detect SV underlocks. SV nodes run automation that enforces both temporary and permanent weight changes on-chain.
 
-### **Migration to On-Chain Enforcement of SV Locks**
+### Migration to On-Chain Enforcement of SV Locks
 
 Analogous to the incremental delivery, we propose to incrementally move the enforcement of SV locks on-chain:
 
@@ -765,7 +765,7 @@ Analogous to the incremental delivery, we propose to incrementally move the enfo
 
 Note that in Step 1, the SVs can create and manage their locks using any TSv1 wallet with support for two-step transfers. They will be able to use substitutions, as soon as the “Substitution for SV and FA locks” feature lands on MainNet and their wallets support substitution either directly or via TSv2 support with generic extended metadata.
 
-### **Migration to On-Chain Enforcement of FA Locks**
+### Migration to On-Chain Enforcement of FA Locks
 
 Analogous to the incremental delivery, we propose to incrementally move the enforcement of FA locks on-chain:
 
@@ -774,11 +774,11 @@ Analogous to the incremental delivery, we propose to incrementally move the enfo
 
 We propose that the feature set considered for Increment 1 consists of the FA lock compatibility mode, basic FA locks with custom controllers, and substitutions. We propose that topups and merges of FA locks are not a strict requirement, but should be delivered soon thereafter.
 
-## **Technical Specification**
+## Technical Specification
 
 The subsections within this technical specification provide additional details on implementation aspects relevant to the integration of governance locks with wallets or apps. They rely on the full high-level specification as context, and where possible they refer to code of the [Reference Implementation](#reference-implementation) to avoid duplicating technical details.
 
-### **Metadata Usage**
+### Metadata Usage
 
 In the context of this CIP, metadata is used in three distinct ways:
 
@@ -790,7 +790,7 @@ All metadata keys used in this CIP are prefixed with `cip-<xxx>/`. We refrain fr
 
 This CIP also depends on the following support for encoding contract-ids as extended metadata.
 
-#### **Support for Extended Metadata**
+#### Support for Extended Metadata
 
 Normal Token Standard metadata ([code](https://github.com/canton-network/splice/blob/ce85b796223b92267877a79a76ab6bb3b5a9949a/token-standard/splice-api-token-metadata-v1/daml/Splice/Api/Token/MetadataV1.daml#L53-L66)) does not support storing (lists of) contract-ids, as Daml does not support conversions between `Text` and `ContractId` values for technical reasons. Substitutions and top-ups require passing in such values. We propose to do so using the following generic approach that builds on the `ChoiceContext` and `AnyValue` types from the `splice-api-token-metadata-v1` package ([code](https://github.com/canton-network/splice/blob/99e962c4f4162e783d50ca4b9cf4202ddd4befb7/token-standard/splice-api-token-metadata-v1/daml/Splice/Api/Token/MetadataV1.daml#L10-L47)).
 
@@ -798,7 +798,7 @@ Contract-id metadata is passed in via the `context : ChoiceContext` field in the
 
 Whether these values are parsed depends on whether a choice implementation path that requires them is selected by the caller via normal metadata. Callers that do so MUST always overwrite the `cip-<xxx>/cid-meta` key in the choice context returned from the off-ledger API of the token standard registries to avoid that a dishonest off-ledger API overwrites their preferred value.
 
-### **Controller Consensus on Withdrawal and Unlock Times**
+### Controller Consensus on Withdrawal and Unlock Times
 
 Withdrawing vested funds requires passing in the timepoint up to which the vested funds are computed, which must be in the past. When authorization from multiple vesting controllers is gathered in multiple steps, each step may come with its own timepoint. These timepoints are accumulated in a way that maximizes the benefit of the funds owner: for withdrawal, the timepoints are combined into the time of withdrawal by taking the latest timepoint.
 
@@ -809,9 +809,9 @@ The same concern applies to unlocking, which requires passing in the timepoint a
 
 The second constraint is required to avoid a corner case where the last controller passes in a timepoint that is very far in the future.
 
-### **Compatibility Mode Details**
+### Compatibility Mode Details
 
-#### **Determining Time Parameters**
+#### Determining Time Parameters
 
 As explained in the [prior section](https://lists.sync.global/g/cip-discuss/message/743), unlocking and withdrawal require extra time parameters. In compatibility mode, these timepoints may not be provided via extra metadata and the implementation must determine them on its own.
 
@@ -822,19 +822,19 @@ For transaction submission workflows that require human interaction (e.g., due t
 
 The heuristic makes use of `isLedgerTimeGE : Time -> Update Bool` ([docs](https://docs.canton.network/appdev/modules/m3-working-with-time#how-to-implement-time-constraints)). The effect is that the first multiple of 24h after `Transfer.requestedAt` becomes the upper bound for the submission time of the prepared transaction. Thus in unlucky cases such a transaction may expire quickly, but an immediate retry of its preparation will result in a transaction that is valid for close to 24h.
 
-### **Wallet Integration Concerns**
+### Wallet Integration Concerns
 
-#### **Holding Display and Selection**
+#### Holding Display and Selection
 
 Locked holdings with expired locks ([code](https://github.com/canton-network/splice/blob/3418ac7be124d75d58f79801fefbd1e7480ccb99/token-standard/splice-api-token-holding-v1/daml/Splice/Api/Token/HoldingV1.daml#L28-L35)) must be treated as unlocked holdings, i.e., they should be included in the available total supply and they should be used to fund transfers and other actions that require input holdings. Doing so ensures that fully vested holdings can always be used as funding as soon as they vest.
 
 This concern is not specific to this CIP. It already applies to working with the locked holdings backing an expired token standard allocation or two-step transfer. We call it out here to ensure that wallet providers are aware of it.
 
-#### **Dual Interface Implementations**
+#### Dual Interface Implementations
 
 Governance locks created implement both the `V1.TransferInstruction` interface and the `V2.Allocation` interface. This implies that a TSv2 wallet might show them both in the list of pending transfer instructions and the list of allocations. We recommend that TSv2 wallets hide transfer instructions that are addressed to one of the three special parties used in the compatibility mode to reduce user confusion.
 
-#### **Integration Options**
+#### Integration Options
 
 Wallets have two options for building full support for governance locks:
 
@@ -855,15 +855,15 @@ The drawback of Option 1 is that users must set the right metadata parameters on
 
 Building such custom UIs for governance locks improves the UX of their users that manage the locks themselves. It is less relevant for users that use a third-party staking app to lock their funds.
 
-### **New Network Configuration Parameters**
+### New Network Configuration Parameters
 
 This CIP introduces multiple new network configuration parameters that govern the behavior of governance locks and can be changed using SV voting. All of them are called out explicitly in the high-level specification section which they affect. A full listing of them together with their concrete names can also be found in the reference implementation here (TODO: link to the new config record(s), which include comments).
 
-# **Motivation**
+# Motivation
 
 This CIP serves to align the stakeholders of [CIP-0105](https://github.com/canton-foundation/cips/blob/main/cip-0105/cip-0105.md) (SV Locking) and [CIP-0116](https://github.com/canton-foundation/cips/blob/main/cip-0116/cip-0116.md) (FA Locking) on the implementation of on-chain enforcement of SV and FA locking. It is motivated by the fact that the concrete mechanisms chosen to implement locking as well as their delivery timelines have a material impact on the network ecosystem in general and the operability of SVs, FAs, and staking apps in particular.
 
-# **Rationale**
+# Rationale
 
 The business rationale for SV and FA locking and their vesting and underlock enforcement was already given as part [CIP-0105](https://github.com/canton-foundation/cips/blob/main/cip-0105/cip-0105.md) and [CIP-0116](https://github.com/canton-foundation/cips/blob/main/cip-0116/cip-0116.md). Where we had to make design choices for this CIP, we optimized for the following priorities:
 
@@ -875,7 +875,7 @@ The business rationale for SV and FA locking and their vesting and underlock enf
 
 Note that Priority 3 is implied by Priority 2, as a well-functioning credit market makes it easier for FAs and SVs to fund their locking requirements. We call it out separately as it was a key priority in the design.
 
-### **Alternatives Considered**
+### Alternatives Considered
 
 The above priorities also reflect in the following alternatives that we considered and rejected for particular implementation choices.
 
@@ -887,7 +887,7 @@ The above priorities also reflect in the following alternatives that we consider
 * **No minimum lock amount:** the minimum lock amount requirement does complicate the operations of staking apps and it would be great to not have it. However without a minimum lock amount there’s a risk that staking apps do produce lots of small locks. A situation that’s similar to how some wallets used to produce lots of “dust” CC holdings, e.g., as part of marketing campaigns. Every lock does consume resources on SV nodes. A minimum lock amount avoids having to spend delivery resources on scalability problems resulting from “dust locks”.
 * **Define a governance-lock specific Daml interface:** the metadata-based interface for interacting with governance locks requires staking apps to build extra decoding and encoding logic. Defining a governance-lock specific Daml interface would obviate the need for this logic. We do not do so, as we believe sharing the interface definitions with wallets and making use of the extensions points in the token standard has lower overall delivery cost.
 
-# **Reference Implementation**
+# Reference Implementation
 
 The reference implementation for the Daml code is currently (Aug 28, 2026) being built as a stack of PRs on this Splice feature fork: [https://github.com/canton-network/splice-sv-fa-locking/pulls](https://github.com/canton-network/splice-sv-fa-locking/pulls)
 
@@ -900,11 +900,11 @@ The work is progressing along the Incremental Delivery Plan. See the list below 
    3. funded with existing locks for the same subject
 3. TODO: add the other PRs
 
-# **Copyright**
+# Copyright
 
 This CIP is licensed under CC0-1.0: Creative Commons CC0 1.0 Universal.
 
-# **Changelog**
+# Changelog
 
 Aug 28, 2026: Initial draft created.
 
