@@ -11,7 +11,7 @@ License: CC0-1.0
 
 # Abstract
 
-This CIP serves to align the stakeholders of [CIP-0105](https://github.com/canton-foundation/cips/blob/main/cip-0105/cip-0105.md) (SV Locking) and [CIP-0116](https://github.com/canton-foundation/cips/blob/main/cip-0116/cip-0116.md) (FA Locking) on the implementation of on-chain enforcement of SV and FA locking. It is motivated by the fact that the concrete mechanisms chosen to implement locking have a material impact on the operability of SVs, FAs, and staking apps.
+This CIP serves to align the stakeholders of [CIP-0105](../cip-0105/cip-0105.md) (SV Locking) and [CIP-0116](../cip-0116/cip-0116.md) (FA Locking) on the implementation of on-chain enforcement of SV and FA locking. It is motivated by the fact that the concrete mechanisms chosen to implement locking have a material impact on the operability of SVs, FAs, and staking apps.
 
 The proposed implementation closely follows the high-level guidance laid out by these two CIPs except for the following three minor changes:
 
@@ -23,7 +23,7 @@ The CIP further clarifies the technical integration between wallets and locks; a
 
 # Specification
 
-This specification explains the concrete mechanisms chosen to implement on-chain enforcement of [CIP-0105](https://github.com/canton-foundation/cips/blob/main/cip-0105/cip-0105.md) (SV Locking) and [CIP-0116](https://github.com/canton-foundation/cips/blob/main/cip-0116/cip-0116.md) (FA Locking). It is split into three sections: high-level specification, incremental delivery plan, and technical specification.
+This specification explains the concrete mechanisms chosen to implement on-chain enforcement of [CIP-0105](../cip-0105/cip-0105.md) (SV Locking) and [CIP-0116](../cip-0116/cip-0116.md) (FA Locking). It is split into three sections: high-level specification, incremental delivery plan, and technical specification.
 
 The [high-level specification](#high-level-specification) is aimed at business stakeholders that want to understand the mechanisms chosen to implement locking; e.g., because they want to figure out the business workflows for a staking app. It also serves as the functional specification for the implementation.
 
@@ -48,7 +48,7 @@ SVs:
 
 Governance locks:
 
-* **(Governance) lock**: a CC holding locked for the purpose of fulfilling the locking requirements mandated by the governance rules specified for SVs in  [CIP-105](https://github.com/canton-foundation/cips/blob/main/cip-0105/cip-0105.md) and for FAs in [CIP-116](https://github.com/canton-foundation/cips/blob/main/cip-0116/cip-0116.md).
+* **(Governance) lock**: a CC holding locked for the purpose of fulfilling the locking requirements mandated by the governance rules specified for SVs in  [CIP-105](../cip-0105/cip-0105.md) and for FAs in [CIP-116](../cip-0116/cip-0116.md).
   * **SV lock**: a governance lock created to satisfy SV locking requirements
   * **FA lock**: a governance lock created to satisfy FA locking requirements
   * **Provisional FA lock:** a governance lock created to apply for an FA right
@@ -60,8 +60,8 @@ Governance locks:
 
 Two wallet integration options are supported:
 
-1. **Full feature integration:** the full feature set of governance locks can be used with any wallet supporting the [CIP-112](https://github.com/canton-foundation/cips/blob/main/cip-0112/cip-0112.md) Token Standard V2 (TSv2) APIs with custom [extended metadata](#support-for-extended-metadata).
-2. **Compatibility mode:** a compatibility mode with a reduced feature set allows using any wallet that supports [CIP-56](https://github.com/canton-foundation/cips/blob/main/cip-0056/cip-0056.md) Token Standard V1 (TSv1) two-step transfers to create locks, unlock them, and withdraw vested funds in daily tranches.
+1. **Full feature integration:** the full feature set of governance locks can be used with any wallet supporting the [CIP-112](../cip-0112/cip-0112.md) Token Standard V2 (TSv2) APIs with custom [extended metadata](#support-for-extended-metadata).
+2. **Compatibility mode:** a compatibility mode with a reduced feature set allows using any wallet that supports [CIP-56](../cip-0056/cip-0056.md) Token Standard V1 (TSv1) two-step transfers to create locks, unlock them, and withdraw vested funds in daily tranches.
 
 The full feature integration requires TSv2 support, as the TSv1 APIs are not expressive enough to represent governance locks and all actions on them. The compatibility mode serves to enable the initial deployment of SV and FA locks without depending on wallet providers to immediately complete TSv2 support.
 
@@ -576,19 +576,19 @@ SVs with multiple beneficiaries have two kinds of options for how to automate th
 
 ### Termination of the SV Lock-Up Requirement
 
-[CIP-105](https://github.com/canton-foundation/cips/blob/main/cip-0105/cip-0105.md#5-sv-locking-and-sv-weight-schedule) requires that “The Lock-up requirement will automatically terminate 30 days after the date of next step down in rewards/halving currently forecast to occur late summer 2029.” We propose to implement that as follows:
+[CIP-105](../cip-0105/cip-0105.md#5-sv-locking-and-sv-weight-schedule) requires that “The Lock-up requirement will automatically terminate 30 days after the date of next step down in rewards/halving currently forecast to occur late summer 2029.” We propose to implement that as follows:
 
 1. Add a new configuration parameter `svLockingDeactivatesAfter : RelTime` configurable by SV voting. This time is measured relative to the opening of the very first round of the network. Its default value is 5 years and 30 days, as the next halving happens 5 years after network start (see the [Minting Curve in the Canton Coin whitepaper](https://www.canton.network/hubfs/Canton%20Network%20Files/Documents%20\(whitepapers%2C%20etc...\)/Canton%20Coin_%20A%20Canton-Network-native%20payment%20application.pdf)).
 2. Change the unlock and withdrawal operations for SV locks such that they unlock the full amount of funds after that timepoint.
 
 ### Automatic Enforcement of SV Underlocking
 
-We propose to add SV node automation that automatically enforces the temporary and permanent loss of SV weight per the rules defined in [CIP-105](https://github.com/canton-foundation/cips/blob/main/cip-0105/cip-0105.md#6-under-locked-sv-weight-enforcement). The implementation requires building on the proposal  from IntellectEU to move [SV weight management fully on-ledger](https://docs.google.com/document/d/1L1cM3m8_8R7x7Vr6vTolwDgS9x2pyFQsaG1gGci3lLE/edit?tab=t.0#heading=h.j1o9vy5fqmrz). The implementation further requires:
+We propose to add SV node automation that automatically enforces the temporary and permanent loss of SV weight per the rules defined in [CIP-105](../cip-0105/cip-0105.md#6-under-locked-sv-weight-enforcement). The implementation requires building on the proposal  from IntellectEU to move [SV weight management fully on-ledger](https://docs.google.com/document/d/1L1cM3m8_8R7x7Vr6vTolwDgS9x2pyFQsaG1gGci3lLE/edit?tab=t.0#heading=h.j1o9vy5fqmrz). The implementation further requires:
 
 1. **adding new configuration parameters:** for the weight schedule, the activation time of on-chain enforcement of SV locking, and the grace periods for temporary and permanent loss of SV weight. They can all be changed by SV voting.
 2. **tracking of newly minted SV rewards on-chain:** once the activation time of on-chain SV locking enforcement is past, minting SV rewards creates SV-mint-receipt contracts that are used by the SV node automation to track changes to an SVs lifetime rewards. They are created both for normal SV rewards and milestone rewards. These contracts are automatically merged by SV automation to keep their number constant.
 3. **storing historic SV reward totals on-chain:** for every SV rights owner the total lifetime rewards earned prior to activating on-chain SV locking enforcement are stored on-chain. These values are set using SV voting.
-4. **on-chain enforcement of underlocks:** extend per-SV state to track underlock events and their grace periods, so that both temporary and permanent weight losses are respected when creating SV reward coupons. As shown in [Example 3 of CIP-105](https://github.com/canton-foundation/cips/blob/main/cip-0105/cip-0105.md#6-under-locked-sv-weight-enforcement), recovery from underlocks is immediate as soon as an SV qualifies for a higher tier.
+4. **on-chain enforcement of underlocks:** extend per-SV state to track underlock events and their grace periods, so that both temporary and permanent weight losses are respected when creating SV reward coupons. As shown in [Example 3 of CIP-105](../cip-0105/cip-0105.md#6-under-locked-sv-weight-enforcement), recovery from underlocks is immediate as soon as an SV qualifies for a higher tier.
 5. **off-chain automation to detect and enforce underlocks:** extend the SV node automation to reconcile at least once per round each SV’s on-chain weight adjustment against the weight adjustment warranted based on the weight schedule, the total locked amounts, and their lifetime rewards.
 
 The bulk of this implementation consists of complex, but purely technical changes to SV node automation, the Daml code for DSO governance, and the Daml code for SV reward coupon creation and minting. From a business-level perspective, the key aspect is how the grace periods work, which we illustrate in the examples below.
@@ -597,7 +597,7 @@ The bulk of this implementation consists of complex, but purely technical change
 
 Automated enforcement relies on the [change to move SV weight management on-chain](https://docs.google.com/document/d/1L1cM3m8_8R7x7Vr6vTolwDgS9x2pyFQsaG1gGci3lLE/edit?tab=t.0#heading=h.j1o9vy5fqmrz). That change introduces an on-chain representation of all SV rights, which records both the SV weight for a given SV right, and the SV node operator hosting the right and driving SV reward coupon creation for it.
 
-Note that there’s the following [special stipulation in CIP-105](https://github.com/canton-foundation/cips/blob/main/cip-0105/cip-0105.md#4-sv-locking-requirement):
+Note that there’s the following [special stipulation in CIP-105](../cip-0105/cip-0105.md#4-sv-locking-requirement):
 
 For any organization that has or does operate more than one Super Validator, the lock up calculation is based on the aggregate lifetime earnings of any/all operating SVs. Any reduction in weighting will apply to total SV Weight for that organization. For the avoidance of doubt this provision applies to SVs identified as Digital-Asset-1, Digital-Asset-2 Cumberland-1 and Cumberland-2.
 
@@ -861,11 +861,11 @@ This CIP introduces multiple new network configuration parameters that govern th
 
 # Motivation
 
-This CIP serves to align the stakeholders of [CIP-0105](https://github.com/canton-foundation/cips/blob/main/cip-0105/cip-0105.md) (SV Locking) and [CIP-0116](https://github.com/canton-foundation/cips/blob/main/cip-0116/cip-0116.md) (FA Locking) on the implementation of on-chain enforcement of SV and FA locking. It is motivated by the fact that the concrete mechanisms chosen to implement locking as well as their delivery timelines have a material impact on the network ecosystem in general and the operability of SVs, FAs, and staking apps in particular.
+This CIP serves to align the stakeholders of [CIP-0105](../cip-0105/cip-0105.md) (SV Locking) and [CIP-0116](../cip-0116/cip-0116.md) (FA Locking) on the implementation of on-chain enforcement of SV and FA locking. It is motivated by the fact that the concrete mechanisms chosen to implement locking as well as their delivery timelines have a material impact on the network ecosystem in general and the operability of SVs, FAs, and staking apps in particular.
 
 # Rationale
 
-The business rationale for SV and FA locking and their vesting and underlock enforcement was already given as part [CIP-0105](https://github.com/canton-foundation/cips/blob/main/cip-0105/cip-0105.md) and [CIP-0116](https://github.com/canton-foundation/cips/blob/main/cip-0116/cip-0116.md). Where we had to make design choices for this CIP, we optimized for the following priorities:
+The business rationale for SV and FA locking and their vesting and underlock enforcement was already given as part [CIP-0105](../cip-0105/cip-0105.md) and [CIP-0116](../cip-0116/cip-0116.md). Where we had to make design choices for this CIP, we optimized for the following priorities:
 
 1. Transition to on-chain SV and FA locks as quickly as possible.
 2. Maximize the total value locked on-chain.
@@ -906,11 +906,11 @@ This CIP is licensed under CC0-1.0: Creative Commons CC0 1.0 Universal.
 
 # Changelog
 
-Aug 28, 2026: Initial draft created.
+* Aug 28, 2026: Initial draft created.
 
-Sep 3, 2026: Incorporated review feedback:
+* Sep 3, 2026: Incorporated review feedback:
 
-* automate termination of SV lock-up period
-* aggregate SV weight across multiple nodes operated by the same SV
-* change "withdrawal controllers" to vesting controllers
-* switch to specifying substitution targets by key instead of by contract-id.
+  * automate termination of SV lock-up period
+  * aggregate SV weight across multiple nodes operated by the same SV
+  * change "withdrawal controllers" to vesting controllers
+  * switch to specifying substitution targets by key instead of by contract-id.
