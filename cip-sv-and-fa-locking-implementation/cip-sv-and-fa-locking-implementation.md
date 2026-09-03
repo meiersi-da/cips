@@ -25,11 +25,11 @@ The CIP further clarifies the technical integration between wallets and locks; a
 
 This specification explains the concrete mechanisms chosen to implement on-chain enforcement of [CIP-0105](https://github.com/canton-foundation/cips/blob/main/cip-0105/cip-0105.md) (SV Locking) and [CIP-0116](https://github.com/canton-foundation/cips/blob/main/cip-0116/cip-0116.md) (FA Locking). It is split into three sections: high-level specification, incremental delivery plan, and technical specification.
 
-The [high-level specification](?tab=t.753u8f9hx8hv#bookmark=id.oae89cn8rdf2) is aimed at business stakeholders that want to understand the mechanisms chosen to implement locking; e.g., because they want to figure out the business workflows for a staking app. It also serves as the functional specification for the implementation.
+The [high-level specification](#high-level-specification) is aimed at business stakeholders that want to understand the mechanisms chosen to implement locking; e.g., because they want to figure out the business workflows for a staking app. It also serves as the functional specification for the implementation.
 
-The [incremental delivery plan](?tab=t.753u8f9hx8hv#bookmark=id.j32a7jo3ri8b) specifies how the full specification is broken down into milestones that can be delivered incrementally, enabling the early delivery of key features. It furthermore explains the expected migration paths to on-chain enforcement for both FA and SV locking.
+The [incremental delivery plan](#incremental-delivery-plan) specifies how the full specification is broken down into milestones that can be delivered incrementally, enabling the early delivery of key features. It furthermore explains the expected migration paths to on-chain enforcement for both FA and SV locking.
 
-The [technical specification](?tab=t.753u8f9hx8hv#bookmark=id.pwnbcoexk9hv) builds on the high-level specification. It clarifies technical aspects where required to clarify the interaction between different systems or applications.
+The [technical specification](#technical-specification) builds on the high-level specification. It clarifies technical aspects where required to clarify the interaction between different systems or applications.
 
 ## **High-Level Specification**
 
@@ -60,7 +60,7 @@ Governance locks:
 
 Two wallet integration options are supported:
 
-1. **Full feature integration:** the full feature set of governance locks can be used with any wallet supporting the [CIP-112](https://github.com/canton-foundation/cips/blob/main/cip-0112/cip-0112.md) Token Standard V2 (TSv2) APIs with custom [extended metadata](?tab=t.753u8f9hx8hv#bookmark=id.fy9jyc9r93x8).
+1. **Full feature integration:** the full feature set of governance locks can be used with any wallet supporting the [CIP-112](https://github.com/canton-foundation/cips/blob/main/cip-0112/cip-0112.md) Token Standard V2 (TSv2) APIs with custom [extended metadata](#support-for-extended-metadata).
 2. **Compatibility mode:** a compatibility mode with a reduced feature set allows using any wallet that supports [CIP-56](https://github.com/canton-foundation/cips/blob/main/cip-0056/cip-0056.md) Token Standard V1 (TSv1) two-step transfers to create locks, unlock them, and withdraw vested funds in daily tranches.
 
 The full feature integration requires TSv2 support, as the TSv1 APIs are not expressive enough to represent governance locks and all actions on them. The compatibility mode serves to enable the initial deployment of SV and FA locks without depending on wallet providers to immediately complete TSv2 support.
@@ -69,11 +69,11 @@ We expect the wallet ecosystem to migrate over time to full feature integrations
 
 #### **Extra Parameters**
 
-Extra parameters and data are communicated over the TSv2 APIs via metadata keys prefixed by `cip-<xxx>/` where `<xxx>` represents the CIP number that will be assigned to this implementation CIP. Communicating this data via metadata keys allows reading and setting them via the generic metadata support of wallets. See the section on [Wallet Support for Extended Metadata](?tab=t.753u8f9hx8hv#bookmark=id.fy9jyc9r93x8) for details on how wallets are expected to provide this support.
+Extra parameters and data are communicated over the TSv2 APIs via metadata keys prefixed by `cip-<xxx>/` where `<xxx>` represents the CIP number that will be assigned to this implementation CIP. Communicating this data via metadata keys allows reading and setting them via the generic metadata support of wallets. See the section on [Support for Extended Metadata](#support-for-extended-metadata) for details on how wallets are expected to provide this support.
 
 ### **Lock Lifecycle**
 
-The following sections describe the lock-life cycle based on the TSv2 APIs. See the final section, titled [”Compatibility Mode Lifecycle”](?tab=t.753u8f9hx8hv#bookmark=id.jl6eiz40jg6f), for details on how the lock lifecycle works when using the compatibility mode based on TSv1 two-step transfers.
+The following sections describe the lock-life cycle based on the TSv2 APIs. See the final section, titled [Compatibility Mode Lifecycle](#compatibility-mode-lifecycle), for details on how the lock lifecycle works when using the compatibility mode based on TSv1 two-step transfers.
 
 #### **Creation**
 
@@ -164,23 +164,23 @@ The result of this request is:
 
 Continuing the above example, assume that `S` automates the withdrawal of vested funds in quarterly increments, i.e., every 15 days. Thus after 15 days, `S` instructs the withdrawal of vested funds which results in:
 
-* payout of 1’000’000 / (60 / 15\) \= 250’000 CC
+* payout of 1'000'000 / (60 / 15) = 250'000 CC
 * updated Vesting Lock with
   * lock owner: `A`
-  * amount vesting: 750’000 CC
+  * amount vesting: 750'000 CC
   * vesting start: `t0 + 15 days`
   * vesting end: `t0 + 60 days`
   * vesting controllers: `{S} | {A}`
 
-Note that the amount vesting and the vesting start are changed to represent the remaining vesting amount and its remaining vesting period. This representation works well with substitution, as can be seen in [this example](?tab=t.753u8f9hx8hv#bookmark=id.4u5thyyoe7xe).
+Note that the amount vesting and the vesting start are changed to represent the remaining vesting amount and its remaining vesting period. This representation works well with substitution, as can be seen in [this example](#example-substitution-of-a-vesting-lock).
 
 #### **Substitution**
 
-Funds owners can create a proposal to use their funds to substitute some (or all) of the locked amount of an existing lock. Substitution works for all types of locks independently of whether they are vesting or not. Substitutions of vesting locks are approved by the vesting controllers, while substitutions of non-vesting locks are approved by the substitution controllers. The new lock to be created is specified as part of the substitution. While it must have the same type as the existing lock, it can have different controllers and [metadata](?tab=t.753u8f9hx8hv#bookmark=id.rtihi1c37gf8).
+Funds owners can create a proposal to use their funds to substitute some (or all) of the locked amount of an existing lock. Substitution works for all types of locks independently of whether they are vesting or not. Substitutions of vesting locks are approved by the vesting controllers, while substitutions of non-vesting locks are approved by the substitution controllers. The new lock to be created is specified as part of the substitution. While it must have the same type as the existing lock, it can have different controllers and [metadata](#metadata-usage).
 
 A substitution generally results in two locks of the same type with the same lock subject whose total amount is equal to the amount of the existing lock. The substituted funds in the existing lock are released as liquid CC to the lock owner of the existing lock. Locks whose locked amount would be zero are not created.
 
-In the spirit of maximizing operational flexibility, a special provision is made for substitutions proposed by the owner of the targeted existing lock. Such a proposal does not lock any funds. Instead the funding of the resulting new locks is provided by splitting the funds of the existing lock. This allows lock owners to update the lock controllers and metadata without requiring any extra liquidity. As for normal substitutions, the substitution controllers on the existing lock must approve the substitution for it to succeed. Note that adding extra funds to an existing lock is not possible using substitutions. For that [Topups](?tab=t.753u8f9hx8hv#bookmark=id.ryociosqalip) should be used.
+In the spirit of maximizing operational flexibility, a special provision is made for substitutions proposed by the owner of the targeted existing lock. Such a proposal does not lock any funds. Instead the funding of the resulting new locks is provided by splitting the funds of the existing lock. This allows lock owners to update the lock controllers and metadata without requiring any extra liquidity. As for normal substitutions, the substitution controllers on the existing lock must approve the substitution for it to succeed. Note that adding extra funds to an existing lock is not possible using substitutions. For that [topups](#topups-merges-and-minting-locked-sv-rewards) should be used.
 
 Minimum lock amounts are enforced on all locks resulting from substitutions. Lock owners are encouraged to lock amounts that are multiples of the minimum lock amount to avoid failed substitutions.
 
@@ -188,7 +188,7 @@ Minimum lock amounts are enforced on all locks resulting from substitutions. Loc
 
 Substitution proposals specify the target lock by value. Concretely they specify type, owner, subject, controllers, vesting state, and metadata of their target lock. The amount is intentionally not included to avoid substitutions that cannot be accepted because the amount changed due to concurrent partial unlocks, partial substitutions, topups, or merges.
 
-The implementation may resolve this target to any lock that matches its specification. No check on the amount is done as part of substitution target resolution, which may lead to failed substitutions if there are substitutions that match the specification but have an amount that is lower than the substitution amount. In these cases we recommend that the lock owners first [merge the locks](?tab=t.753u8f9hx8hv#bookmark=id.ryociosqalip) matching the same specification and only then apply the substitution.
+The implementation may resolve this target to any lock that matches its specification. No check on the amount is done as part of substitution target resolution, which may lead to failed substitutions if there are substitutions that match the specification but have an amount that is lower than the substitution amount. In these cases we recommend that the lock owners first [merge the locks](#topups-merges-and-minting-locked-sv-rewards) matching the same specification and only then apply the substitution.
 
 ##### Example: Substitution of Locked Funds
 
@@ -275,11 +275,11 @@ Note that no holdings are reserved, as the lock owner does not change. Once `S` 
 
 ##### Example: Substitution of a Vesting Lock
 
-The earlier [example of withdrawing from a vesting lock](?tab=t.753u8f9hx8hv#bookmark=id.19jfsxsxy0c7) resulted in the following vesting lock:
+The earlier [example of withdrawing from a vesting lock](#example-withdrawing-vested-funds) resulted in the following vesting lock:
 
 * Vesting Lock with
   * lock owner: `A`
-  * amount vesting: 750’000 CC
+  * amount vesting: 750'000 CC
   * vesting start: `t0 + 15 days`
   * vesting end: `t0 + 60 days`
   * vesting controllers: `{S} | {A}`
@@ -307,13 +307,13 @@ Assume further the `S` and `A` jointly accept the proposal, which results in:
 * archival of the proposal
 * Vesting Lock with
   * lock owner: `A`
-  * amount vesting: 500’000 CC
+  * amount vesting: 500'000 CC
   * vesting start: `t0 + 15 days`
   * vesting end: `t0 + 60 days`
   * vesting controllers: `{S} | {A}`
 * Vesting Lock with
   * lock owner: `B`
-  * amount vesting: 250’000 CC
+  * amount vesting: 250'000 CC
   * vesting start: `t0 + 15 days`
   * vesting end: `t0 + 60 days`
   * vesting controllers: `{S, B}`
@@ -359,7 +359,7 @@ This topup request will immediately succeed and result in:
 Assume that `A` agreed to substitute five existing FA locks over 1M CC each for lock subject `X` using staking app `S`. They thus have five FA locks of the form:
 
 * FA Lock with:
-  * contract-id: `cid_i` for 1 \<= `i` \<= 5
+  * contract-id: `cid_i` for 1 <= `i` <= 5
   * lock owner: `A`
   * lock subject: `X`
   * amount: 1M CC
@@ -384,14 +384,14 @@ This can for example be useful to prepare for an upcoming substitution of 2.5M C
 
 ##### Example: Mint Locked SV Rewards
 
-Assume that an SV `“ExampleSV”` uses party `A` to lock the required funds for their SV right, and they target to earn 100% of their SV rights. At the start of the weight enforcement period this requires them to lock 70% of their SV rewards. They set up their SV right such that their SV reward coupons all specify party `A` as the beneficiary.
+Assume that an SV `ExampleSV` uses party `A` to lock the required funds for their SV right, and they target to earn 100% of their SV rights. At the start of the weight enforcement period this requires them to lock 70% of their SV rewards. They set up their SV right such that their SV reward coupons all specify party `A` as the beneficiary.
 
 Thus every round they have:
 
 * SV Lock with:
   * contract-id: `cid1`
   * lock owner: `A`
-  * lock subject: `”ExampleSV`
+  * lock subject: `ExampleSV`
   * amount: `<current-amount>` CC
 * SV reward coupon with:
   * contract-id: `cid2`
@@ -411,7 +411,7 @@ The request will immediately succeed and result in:
 * SV Lock with:
   * contract-id: `cid1`
   * lock owner: `A`
-  * lock subject: `”ExampleSV`”
+  * lock subject: `ExampleSV`
   * amount: `<current-amount> + <round r issuance per SV weight> * <example-weight> * 0.7` CC
 * payout of liquid CC of `<round r issuance per SV weight> * <example-weight> * 0.3`
 
@@ -421,7 +421,7 @@ Similar to lot sizes in TradFi, FA and SV locks must lock a minimum amount confi
 
 The minimum amount restriction is enforced on all actions that create additional locks; e.g., when doing a partial unlock or a partial substitution both of the resulting locks must be larger than the minimum amount. Actions that archive at least one existing lock and result in a single new lock are allowed to produce locks with an amount below the minimum. For example, it is always possible to substitute or unlock the whole lock amount or to merge existing locks, even if the SVs voted to increase the minimum lock amount after the locks were created.
 
-Note that new SVs will need to lock the minimum lock amount once they are onboarded to avoid [losing their SV weight as shown in this example](?tab=t.753u8f9hx8hv#bookmark=id.fyth4ao3bt4l).
+Note that new SVs will need to lock the minimum lock amount once they are onboarded to avoid [losing their SV weight as shown in this example](#example-temporary-loss-of-reward-weight).
 
 #### **Compatibility Mode Lifecycle**
 
@@ -439,7 +439,7 @@ They do so by initiating a TSv1 transfer to a special party with a reason that n
   * receiver: `cip-<xxx>_provisional-fa-lock::1220000000000000000000000000000000000000000000000000000000000000abcd`
   * reason: `lock-subject=<fa-party-id>`
 
-The SV rights owner names correspond to the names that are currently specified in the `approved-sv-id-values.yaml` ([code](http://approved-sv-id-values.yaml)). Only minimal fat-finger error protection is provided: they only check that (a) the reason field starts with `lock-subject=`, (b) the parsed SV rights owner names consist of alphanumeric characters and hyphens (`-`), and (c) the FA parties are registered parties on the global synchronizer. It is the responsibility of the funds owner to specify the right values.
+The SV rights owner names correspond to the names that are currently specified in [`approved-sv-id-values.yaml`](https://github.com/canton-foundation/configs/blob/main/configs/MainNet/approved-sv-id-values.yaml). Only minimal fat-finger error protection is provided: they only check that (a) the reason field starts with `lock-subject=`, (b) the parsed SV rights owner names consist of alphanumeric characters and hyphens (`-`), and (c) the FA parties are registered parties on the global synchronizer. It is the responsibility of the funds owner to specify the right values.
 
 The funds owner can always request unlocking the funds by withdrawing the transfer offer. It immediately starts vesting. The transfer offer itself continues to be shown in the wallet, but with a changed state that reports that the funds are vesting.
 
@@ -454,7 +454,7 @@ The limitations of the compatibility mode are the following:
 3. no support for topups, merges, and locked SV reward minting
 4. the locks show as long-lived transfer offers in the wallet UI
 5. extra metadata must be provided to guarantee a 24h prepare-submission delay
-   (see [Compatibility Mode Details](?tab=t.753u8f9hx8hv#bookmark=id.8p80d9353ky6))
+  (see [Compatibility Mode Details](#compatibility-mode-details))
 
 ### **Automatic Enforcement of FA Underlocking**
 
@@ -534,7 +534,7 @@ No automatic unlocking of funds happens. However `X` can unlock their remaining 
 
 ### **Automated SV Reward Locking**
 
-We propose to extend the reward minting automation of validator nodes to mint a percentage of SV rewards directly in locked form by [topping up an existing lock](?tab=t.753u8f9hx8hv#bookmark=id.ryociosqalip). Concretely, we expect validator nodes to accept a configuration as shown in the following example:
+We propose to extend the reward minting automation of validator nodes to mint a percentage of SV rewards directly in locked form by [topping up an existing lock](#topups-merges-and-minting-locked-sv-rewards). Concretely, we expect validator nodes to accept a configuration as shown in the following example:
 
 ```textproto
 canton.validator-apps.validator_backend {
@@ -559,12 +559,12 @@ The second config option shown for `ExampleSV2` serves to handle cases where an 
 
 For the minting automation to work for `ExampleSV1`, it must hold that:
 
-1. `ExampleSV1` configures `alice::1220abc…def` as an SV reward beneficiary on the SV node that hosts `ExampleSV1`.
-2. There exists an SV lock with lock owner `alice::1220abc…def` and lock subject `ExampleSV1`.
-3. The `alice::1220abc…def` party is hosted in at least observer mode on the validator node running the automation.
-4. In case `alice::1220abc…def` is an external party, their owner has set up a minting delegation with a party hosted on the validator node running the automation.
+1. `ExampleSV1` configures `alice::1220abc...def` as an SV reward beneficiary on the SV node that hosts `ExampleSV1`.
+2. There exists an SV lock with lock owner `alice::1220abc...def` and lock subject `ExampleSV1`.
+3. The `alice::1220abc...def` party is hosted in at least observer mode on the validator node running the automation.
+4. In case `alice::1220abc...def` is an external party, their owner has set up a minting delegation with a party hosted on the validator node running the automation.
 
-If all of these conditions are met, then every minting round 70% of the SV rewards received by `alice::1220abc…def` will be added to the existing lock, and the remaining 30% will be minted as liquid CC owned by `alice::1220abc…def`.
+If all of these conditions are met, then every minting round 70% of the SV rewards received by `alice::1220abc...def` will be added to the existing lock, and the remaining 30% will be minted as liquid CC owned by `alice::1220abc...def`.
 
 #### **Example: Single Beneficiary Configuration**
 
@@ -599,7 +599,7 @@ Automated enforcement relies on the [change to move SV weight management on-chai
 
 Note that there’s the following [special stipulation in CIP-105](https://github.com/canton-foundation/cips/blob/main/cip-0105/cip-0105.md#4-sv-locking-requirement):
 
-For any organization that has or does operate more than one Super Validator, the lock up calculation is based on the aggregate lifetime earnings of any/all operating SVs. Any reduction in weighting will apply to total SV Weight for that organization. For the avoidance of doubt this provision applies to SVs identified as Digital-Asset \-1, Digital-Asset \-2 Cumberland \-1 and Cumberland \-2.
+For any organization that has or does operate more than one Super Validator, the lock up calculation is based on the aggregate lifetime earnings of any/all operating SVs. Any reduction in weighting will apply to total SV Weight for that organization. For the avoidance of doubt this provision applies to SVs identified as Digital-Asset-1, Digital-Asset-2 Cumberland-1 and Cumberland-2.
 
 To handle that stipulation, we propose to add the notion of an optional ultimate SV rights owner to on-ledger SV right representation. If not set, then the SV rights owner is considered the ultimate SV rights owner. All computations that determine underlocks always aggregate locks, lifetime rewards, and weights for the ultimate SV rights owner.
 
@@ -611,7 +611,7 @@ In case of an underlock, the enforcement will happen on-chain by modifying both 
 
 #### **Example: Temporary Loss of Reward Weight**
 
-Assume there’s an SV right owner named `ExampleSV` onboarded with weight 10\. Assume further that they use party `A` to receive rewards, and that they were onboarded after on-chain SV locking enforcement was activated. Their reward state is:
+Assume there’s an SV right owner named `ExampleSV` onboarded with weight 10. Assume further that they use party `A` to receive rewards, and that they were onboarded after on-chain SV locking enforcement was activated. Their reward state is:
 
 * SV Reward State:
   * SV name: `ExampleSV`
@@ -740,12 +740,12 @@ Note that both the temporary adjustment deadlines and the permanent deadline tha
 
 ## **Incremental Delivery Plan**
 
-We propose an incremental delivery that focuses first on on-chain enforcement of locks and then on improving the UX for maintaining these locks. Concretely, we propose the following increments of the features specified in the [High-Level Specification](?tab=t.753u8f9hx8hv#bookmark=id.oae89cn8rdf2):
+We propose an incremental delivery that focuses first on on-chain enforcement of locks and then on improving the UX for maintaining these locks. Concretely, we propose the following increments of the features specified in the [High-Level Specification](#high-level-specification):
 
 1. **Compatibility mode for SV locks:** implement the compatibility mode based on the TSv1 APIs for creating SV locks. Locks must always lock an SV determined minimal amount of CC.
 2. **Compatibility mode for FA locks:** implement the compatibility mode based on the TSv1 APIs for creating (provisional) FA locks; and add SV automation to convert provisional into full FA locks once the corresponding featured app right is created.
 3. **Basic SV and FA locks and non-default controllers:** add support to use the TSv2 APIs to interact with SV and (provisional) FA locks and to create SV and (provisional) FA locks with custom controllers for unlocking, substitution and withdrawal.
-4. **Substitution for SV and FA locks:** add support to use the TSv2 APIs to propose substitutions of (vesting) SV and FA locks as described in the section on [Substitution](?tab=t.753u8f9hx8hv#bookmark=id.s2cbpofcukwj).
+4. **Substitution for SV and FA locks:** add support to use the TSv2 APIs to propose substitutions of (vesting) SV and FA locks as described in the section on [Substitution](#substitution).
 5. **Topups and Merges for SV and FA locks:** add support to use the TSv2 APIs to execute topups and merges including the ability to mint SV rewards directly in locked form into an existing SV lock.
 6. **Automatic enforcement of FA underlocking:** FA underlocks are tracked and automatically enforced after a seven day grace period.
 7. **SV lock top-up automation:** extend the minting automation of validator nodes to mint a target percentage of SV rewards in locked form.
@@ -776,7 +776,7 @@ We propose that the feature set considered for Increment 1 consists of the FA lo
 
 ## **Technical Specification**
 
-The subsections within this technical specification provide additional details on implementation aspects relevant to the integration of governance locks with wallets or apps. They rely on the full high-level specification as context, and where possible they refer to code of the [Reference Implementation](?tab=t.753u8f9hx8hv#bookmark=id.id3utrsqnbfh) to avoid duplicating technical details.
+The subsections within this technical specification provide additional details on implementation aspects relevant to the integration of governance locks with wallets or apps. They rely on the full high-level specification as context, and where possible they refer to code of the [Reference Implementation](#reference-implementation) to avoid duplicating technical details.
 
 ### **Metadata Usage**
 
@@ -889,7 +889,7 @@ The above priorities also reflect in the following alternatives that we consider
 
 # **Reference Implementation**
 
-The reference implementation for the Daml code is currently (Aug 28, 2026\) being built as a stack of PRs on this Splice feature fork: [https://github.com/canton-network/splice-sv-fa-locking/pulls](https://github.com/canton-network/splice-sv-fa-locking/pulls)
+The reference implementation for the Daml code is currently (Aug 28, 2026) being built as a stack of PRs on this Splice feature fork: [https://github.com/canton-network/splice-sv-fa-locking/pulls](https://github.com/canton-network/splice-sv-fa-locking/pulls)
 
 The work is progressing along the Incremental Delivery Plan. See the list below for the links to the PRs and their status:
 
