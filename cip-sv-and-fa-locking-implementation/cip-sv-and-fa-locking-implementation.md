@@ -65,7 +65,7 @@ Two wallet integration options are supported:
 
 The full feature integration requires TSv2 support, as the TSv1 APIs are not expressive enough to represent governance locks and all actions on them. The compatibility mode serves to enable the initial deployment of SV and FA locks without depending on wallet providers to immediately complete TSv2 support.
 
-We expect the wallet ecosystem to migrate over time to full feature integrations based on the TSv2 APIs. Some might even go further and build dedicated UIs for interacting with governance locks. We further expect the TSv2 APIs to be used by all apps (e.g., staking apps) that want to interact with governance locks.
+We expect the wallet ecosystem to migrate over time to full feature integrations based on the TSv2 APIs. Some might even go further and build dedicated UIs for interacting with governance locks. We further expect the TSv2 APIs to be used by all apps (e.g., staking apps) that want to interact with governance locks. See [Wallet Integration Details](#wallet-integration-concerns) for details on the wallet integration.
 
 #### Extra Parameters
 
@@ -599,7 +599,7 @@ Automated enforcement relies on the [change to move SV weight management on-chai
 
 Note that there’s the following [special stipulation in CIP-105](../cip-0105/cip-0105.md#4-sv-locking-requirement):
 
-For any organization that has or does operate more than one Super Validator, the lock up calculation is based on the aggregate lifetime earnings of any/all operating SVs. Any reduction in weighting will apply to total SV Weight for that organization. For the avoidance of doubt this provision applies to SVs identified as Digital-Asset-1, Digital-Asset-2 Cumberland-1 and Cumberland-2.
+> For any organization that has or does operate more than one Super Validator, the lock up calculation is based on the aggregate lifetime earnings of any/all operating SVs. Any reduction in weighting will apply to total SV Weight for that organization. For the avoidance of doubt this provision applies to SVs identified as Digital-Asset-1, Digital-Asset-2 Cumberland-1 and Cumberland-2.
 
 To handle that stipulation, we propose to add the notion of an optional ultimate SV rights owner to on-ledger SV right representation. If not set, then the SV rights owner is considered the ultimate SV rights owner. All computations that determine underlocks always aggregate locks, lifetime rewards, and weights for the ultimate SV rights owner.
 
