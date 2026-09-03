@@ -1,11 +1,13 @@
-CIP: `<xxx>` CIP number to be assigned
-    (TODO: add actual CIP number and search and replace through the doc)
+<pre>
+CIP: &lt;xxx&gt; CIP number to be assigned
+     (TODO: add actual CIP number and search and replace through the doc)
 Title: On-Chain Enforcement of FA and SV Locking (Implementation of CIP-0116 and CIP-0105)
-Author: Obsidian (?), Simon Meier
+Author: Obsidian, Simon Meier
 Status: Draft
 Type: Governance
 Created: Aug 10, 2026
 License: CC0-1.0
+</pre>
 
 # **Abstract**
 
