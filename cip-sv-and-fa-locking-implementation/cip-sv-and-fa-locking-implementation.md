@@ -476,7 +476,8 @@ We propose to implement automatic enforcement of FA underlocking using the follo
 
 We propose to configure minimum lock thresholds using a combination of a network-wide threshold and an FA specific override. Both are set using SV voting. To minimize the number of votes required to set the right thresholds, we propose to default the network-wide threshold to 5M CC and use votes to override the thresholds of featured asset issuers to the required 25M CC.
 
-To increase operational flexibility, we propose to enforce underlocks with a 7 day grace period and a 24 hour recovery period (both configurable using SV voting) that work as follows:
+To increase operational flexibility, we propose to enforce underlocks with a 7 day grace period
+(configurable using SV voting) that works as follows:
 
 1. **Immediate suspension:** while an FA is underlocked, it is suspended, which means that it no longer creates featured app markers nor does it participate in traffic-based app rewards for rounds opened while it is suspended.
 2. **Permanent loss:** if the underlock remains active for more than the 7 day grace period, then the FA status is permanently lost.
@@ -527,14 +528,14 @@ A day later, app provider `X` asks funds owner `A` to lock 5M CC in exchange for
   * amount: 5M CC
   * unlock controllers: `{A}`
 
-A few seconds later at `t2`, the SV node automation detects the underlock recovery and reports this on-chain, which results in:
+A few seconds later, the SV node automation detects the underlock recovery and reports this on-chain, which results in:
 
 * updated FA Right:
   * provider: `X`
+  * underlocked: `False`
   * minimum lock amount override: 25M CC
-  * underlocked until: `t2 + 24h`
 
-Once `t2 + 24h` is past, the FA right will again create featured app markers and be respected in the computations for traffic-based app activity records for rounds that open after this time.
+Thus the FA right again creates featured app markers and is respected in the computations for traffic-based app activity records for rounds that open after this time.
 
 #### Example: Permanent Loss
 
