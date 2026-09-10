@@ -2,7 +2,7 @@
 CIP: &lt;xxx&gt; CIP number to be assigned
      (TODO: add actual CIP number and search and replace through the doc)
 Title: On-Chain Enforcement of FA and SV Locking (Implementation of CIP-0116 and CIP-0105)
-Author: Obsidian, Simon Meier
+Author: Jonathan D.K. Gibbons @ Obsidian Systems, Simon Meier @ Digital Asset
 Status: Draft
 Type: Governance
 Created: Aug 10, 2026
