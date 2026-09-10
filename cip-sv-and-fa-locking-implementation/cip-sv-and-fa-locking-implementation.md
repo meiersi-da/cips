@@ -427,23 +427,33 @@ Note that new SVs will need to lock the minimum lock amount once they are onboar
 
 Funds owners whose wallets do not support the TSv2 allocation APIs can use TSv1 two-step transfers to create a lock whose unlocking, substitution, and withdrawal is controlled by the funds owner itself.
 
-They do so by initiating a TSv1 transfer to a special party with a reason that names the lock subject. Concretely, the parameters for the different types of locks are:
+They do so by initiating a TSv1 transfer to a special party with a memo tag that names the lock subject. Concretely, the parameters for the different types of locks are:
 
 * SV lock:
   * receiver: `cip-<xxx>_sv-lock::1220000000000000000000000000000000000000000000000000000000000000abcd`
-  * reason: `lock-subject=<SV rights owner name>`
+  * memo tag: `lock-subject=<SV rights owner name>`
 * FA lock:
   * receiver: `cip-<xxx>_fa-lock::1220000000000000000000000000000000000000000000000000000000000000abcd`
-  * reason: `lock-subject=<fa-party-id>`
+  * memo tag: `lock-subject=<fa-party-id>`
 * Provisional FA lock:
   * receiver: `cip-<xxx>_provisional-fa-lock::1220000000000000000000000000000000000000000000000000000000000000abcd`
-  * reason: `lock-subject=<fa-party-id>`
+  * memo tag: `lock-subject=<fa-party-id>`
 
-The SV rights owner names correspond to the names that are currently specified in [`approved-sv-id-values.yaml`](https://github.com/canton-foundation/configs/blob/main/configs/MainNet/approved-sv-id-values.yaml). Only minimal fat-finger error protection is provided: they only check that (a) the reason field starts with `lock-subject=`, (b) the parsed SV rights owner names consist of alphanumeric characters and hyphens (`-`), and (c) the FA parties are registered parties on the global synchronizer. It is the responsibility of the funds owner to specify the right values.
+The SV rights owner names correspond to the names that are currently specified in [`approved-sv-id-values.yaml`](https://github.com/canton-foundation/configs/blob/main/configs/MainNet/approved-sv-id-values.yaml). Only minimal fat-finger error protection is provided: they only check that (a) the memo tag field starts with `lock-subject=`, (b) the parsed SV rights owner names consist of alphanumeric characters and hyphens (`-`), and (c) the FA parties are registered parties on the global synchronizer. It is the responsibility of the funds owner to specify the right values.
 
 The funds owner can always request unlocking the funds by withdrawing the transfer offer. It immediately starts vesting. The transfer offer itself continues to be shown in the wallet, but with a changed state that reports that the funds are vesting.
 
 The funds owner can withdraw the vested funds by calling withdraw on the transfer offer again. If all funds have vested, the transfer offer is archived. Otherwise it remains in the wallet, but with a transfer offer amount reduced by the amount of funds that have vested and were paid out.
+
+The status of a lock is reported as a prefix in the memo tag of the transfer offer.
+The prefix is `lock-status=<status>&` where `<status>` can be one of the following:
+
+* `locked`: the funds are currently locked and are counted towards the lock threshold
+* `vesting-until-<end-time>`: the funds are vesting until the specified end time
+
+For example, the memo tag `lock-status=locked&lock-subject=ExampleSV` indicates that the funds are
+currently locked for `ExampleSV` and count towards their lock threshold.
+
 
 ##### Limitations
 
