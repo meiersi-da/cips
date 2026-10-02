@@ -169,7 +169,7 @@ data Credential_ArchiveAsHolderResult = Credential_ArchiveAsHolderResult with
  deriving (Eq, Show)
 ```
 
-Credential registries MAY enforce limits on the credentials they store to avoid operational problems from overly large credentials. The limits are communicated to users via the [Credential Registry Info API](#credential-registry-info-api). See [Rationale > DSO Credential Registry Limits](#dso-credential-registry-limits) for the concrete limits enforced by the SV operated registry.
+Credential registries MAY enforce limits on the credentials they store to avoid operational problems from overly large credentials. The limits are communicated to users via the [Credential Registry Info API](#credential-registry-info-api). See [DSO Credential Registry Limits](#dso-credential-registry-limits) for the concrete limits enforced by the SV operated registry.
 
 #### Credential Factory Interface
 
@@ -207,7 +207,7 @@ A draft API is specified in [openapi/credential-registry-v1.yaml](https://github
 
 The purpose of the credential lookup API is to allow a rich set of retrieval operations to be directly implemented on top of any credential registry under the constraint that the indexing overhead for credential registries is manageable.
 
-A draft API is specified in [openapi/credential-registry-v1.yaml](https://github.com/hyperledger-labs/splice/pull/3416/changes#diff-a73145dfdb26770f01b5fc0a9f35c7c34f067584acb6ec16de7e82040df6f835). It supports filtering by holder, multiple issuers, and a key prefix. The resolution of multiple entries for the same key is left to the client of the API. The API MUST include the record time of the transaction that created the credential contract. Record time is the Canton protocol sequencing time of that transaction's confirmation request. Clients that implement last-write-wins select the credential with the latest record time. A client that needs a deterministic winner MAY break a tie on record time by selecting the credential whose contract id is lexicographically smaller, using the contract-id string returned by the API. A client for which that tie means the name does not resolve does not select a winner.
+A draft API is specified in [openapi/credential-registry-v1.yaml](https://github.com/hyperledger-labs/splice/pull/3416/changes#diff-a73145dfdb26770f01b5fc0a9f35c7c34f067584acb6ec16de7e82040df6f835). It supports filtering by holder, multiple issuers, and a key prefix. The resolution of multiple entries for the same key is left to the client of the API. The API MUST include the record time of the transaction that created the credential contract. Record time is the Canton protocol sequencing time of that transaction's confirmation request. Clients that implement last-write-wins select the credential with the latest record time. A client that needs a deterministic winner MAY break a tie on record time by selecting the credential whose contract id is lexicographically smaller, using the contract-id string returned by the API. A client for which that tie means the name does not resolve does not select a winner. The API returns matches ordered by matched claim key ascending, then record time descending, then contract id ascending. Within one key, the first record is the last-write-wins winner.
 
 By default the API only returns the `CredentialView` of a credential. It optionally also includes the underlying contract so that it can be disclosed for usage in a Daml transaction that reads the credential.
 
@@ -215,7 +215,7 @@ By default the API only returns the `CredentialView` of a credential. It optiona
 
 The purpose of the bulk credential retrieval API is to enable network explorers to ingest all credentials of a registry as they are created, updated, and archived.
 
-The corresponding HTTP endpoints work by exposing the list of synchronizers which are used by the registry to store credentials, and then offering retrieving pages of create and archive events for all credentials in record time order.
+The corresponding HTTP endpoints work by exposing the list of synchronizers which are used by the registry to store credentials, and then offering retrieving pages of create and archive events for all credentials in ascending record time order, with contract id ascending as the tie-break.
 
 ## DSO Credential Registry
 
@@ -249,6 +249,18 @@ This authorization policy is chosen to allow credential issuance apps to extend 
 For example by creating the credential and extending its expiration in the same
 transaction.
 
+### DSO Credential Registry Limits
+
+The DSO Credential Registry rejects records that are too large to index and serve from Scan. It does not validate claim content. Content checks are application-specific and would bind the registry to particular use cases.
+
+A DSO credential record is accepted only if all of the following hold:
+
+- it contains at most 32 claims.
+- each claim key is shorter than 512 characters, with the property at most 254 characters and the subject at most 255 characters, so that a full party-id can appear as subject.
+- each claim value is shorter than 2048 characters.
+- `validFrom` and `validUntil`, when present, are consistent with each other and with the record's `createdAt`.
+
+These limits are advertised via the Credential Registry Info API. Other registries MAY choose different limits.
 
 ### Technical Details
 
@@ -261,7 +273,7 @@ The APIs are implemented as follows:
 3. The Scan app proxy served by the validator app implements the [openapi/credential-registry-v1.yaml](https://github.com/hyperledger-labs/splice/pull/3416/changes#diff-a73145dfdb26770f01b5fc0a9f35c7c34f067584acb6ec16de7e82040df6f835), calling out to multiple Scan apps and comparing the results to implement BFT reads.
 4. The SV app is extended with automation ensuring that there is exactly one `AnsCredentialRecord` self-published by the `dso` party, which announces the URLs of the Scan apps serving the off-ledger APIs of the DSO Credential Registry.
 
-A generic Token Standard V1 send can set the receiver and a memo, and still cannot name the credential. Wallets that can only set those two fields go through the issuer dApp, which prepares the transaction. Token Standard V2 extraArgs can carry both the expiration time and the contract id.
+A generic Token Standard V1 send can set the receiver and a memo, and still cannot set `extraArgs.context`. Wallets that can only set those two fields go through the credential issuer's dApp, which prepares the transaction. Token Standard V2 extraArgs can carry both the expiration time and the contract id.
 
 ## Standardized Application and Metadata Discovery
 
@@ -278,12 +290,6 @@ This CIP defines the following keys:
   Multiple URLs are supported for decentralized registries, so that clients can implement BFT reads.
 
 - `cip-TBD/credential-issuer-app-url`: serves to discover the dApp of a specific credential issuer party `issuer`. It is self-published by the `issuer` party in the DSO Credential Registry. The idea is that the users' wallets read the user's credentials from their node, and then query the DSO Credential Registry using `cip-TBD/credential-issuer-app-url` to discover the URL for the issuer-specific dApp to manage the user's credentials. We expect the wallet UI to offer a redirect to that dApp. These redirects to this URL may specify a `credential-contract-id=<contract-id>` query parameter to focus on a particular credential. Whether to offer such a UI is optional for credential issuers.
-
-- `cip-TBD/is-featured-app`: is issued by the `dso` party in the DSO Credential Registry to communicate the featured app status of the `holder` of the credential with this key. It is an ordinary registry record, not a `Credential` view of `FeaturedAppRight`. This CIP's implementation does not mint such a record from each `FeaturedAppRight`. The corresponding credentials are of the form:
-
-```text
-(property="cip-TBD/is-featured-app", value="")
-```
 
 In general, the expectation is that all properties in a credential's claims have the form `namespace/property` and the namespaces are one of the following:
 
@@ -319,7 +325,7 @@ The aim is common building blocks so existing credentials can be served in an in
 
 The Credential Registry APIs and the DSO Credential Registry are meant to serve as building blocks for use-cases like service discovery, self-published profiles, name resolution, and KYC verification services. In the following sections, we explain how we believe these kinds of services can be built on top of the building blocks provided by this CIP.
 
-These explanations are not meant to specify a standard for how to solve these use cases. They are meant to validate and demonstrate the building blocks provided by this CIP.
+These explanations are not normative and are not requirements of this CIP. They show options for applying the API. They are meant to validate and demonstrate the building blocks provided by this CIP.
 
 Nevertheless many of these use-cases profit from lightweight CIPs standardizing common claims and/or resolution mechanisms. We expect future CIPs to provide this kind of standardization on top of the building block provided by this CIP.
 
@@ -330,13 +336,6 @@ The problem of service discovery on the Canton Network is about how to resolve t
 A typical example is the problem of wallets having to resolve the registry `admin` party-id on `Holding` contracts owned by their user to the [URL of the off-ledger registry API](https://github.com/global-synchronizer-foundation/cips/blob/main/cip-0056/cip-0056.md#off-ledger-api-discovery-and-access). The wallet needs to know this URL to read token metadata like total supply and to get the required data for transferring `Holding`s.
 
 As shown in [Discovering the DSO Credential Registry](#discovering-the-dso-credential-registry), storing the URLs of services associated with a party under a well-known claim in a self-published credential in the DSO Credential Registry solves this problem.
-
-##### Application Discovery
-
-The list of all featured applications can be retrieved by querying for the
-corresponding credential issued by the `dso` party with property
-`cip-TBD/is-featured-app`.
-Fetching the public credentials held by their application provider party then allows discovering further meta information about the application.
 
 ### Profile Publication
 
@@ -430,19 +429,6 @@ These statements are always made by the issuer of the KYC credential and should 
 
 We suggest that organizations experiment with the exact claims that they need to outsource KYC services, and then use their experience to build a CIP standardizing the claims that have proven their value for wide use.
 
-## DSO Credential Registry Limits
-
-The DSO Credential Registry rejects records that are too large to index and serve from Scan. It does not validate claim content. Content checks are application-specific and would bind the registry to particular use cases.
-
-A DSO credential record is accepted only if all of the following hold:
-
-- it contains at most 32 claims.
-- each claim key is shorter than 512 characters, with the property at most 254 characters and the subject at most 255 characters, so that a full party-id can appear as subject.
-- each claim value is shorter than 2048 characters.
-- `validFrom` and `validUntil`, when present, are consistent with each other and with the record's `createdAt`.
-
-These limits are advertised via the Credential Registry Info API. Other registries MAY choose different limits.
-
 ## Focus on Public Credentials Only
 
 This CIP covers credentials that can be discovered publicly. Public records are useful on their own, and they are how applications and explorers learn the shape of the network. Credentials MUST be public to be indexable by explorers. The bulk retrieval API is built for that ingest.
@@ -457,18 +443,9 @@ We expect that a future CIP that standardizes CNS, potentially including identit
 
 ## Implementation
 
-A draft of the HTTP and Daml APIs, and of the DSO Credential Registry, is in [this Splice PR](https://github.com/hyperledger-labs/splice/pull/3416). It includes `Splice.Api.Credential.RegistryV1`, `openapi/credential-registry-v1.yaml`, and the DSO templates `AnsCredentialRegistry` and `AnsCredentialRecord`. It does not implement `Credential` on `AnsEntry` or on `FeaturedAppRight`.
+A draft of the HTTP and Daml APIs, and of the DSO Credential Registry, is in [this Splice PR](https://github.com/hyperledger-labs/splice/pull/3416). It includes `Splice.Api.Credential.RegistryV1`, `openapi/credential-registry-v1.yaml`, and the DSO templates `AnsCredentialRegistry` and `AnsCredentialRecord`. It does not implement `Credential` on `AnsEntry`.
 
 Lookup pagination (`limit`, `pageToken`) is specified in that OpenAPI. The Bulk Credential Retrieval API is specified in this CIP. It is not a path in that yaml yet.
-
-Scan is expected to maintain listing indices, used in this priority order:
-
-1. `(holder, property, issuer, record_time)` when a holder is specified
-2. `(property, issuer, record_time)` when a key prefix is specified
-3. `(issuer, record_time)` when an issuer is specified
-4. `(record_time)` when listing without those filters
-
-Pagination follows the chosen index. `record_time` and `contract_id` keep that page order stable. Scan lists in ascending `record_time`, which makes older records cheaper to page and to archive. That page order is not the client last-write-wins rule in the Credential Lookup API. Last-write-wins selects the latest record time. A client that needs a deterministic winner MAY then select the lexicographically smaller contract-id string returned by the API. The unfiltered `record_time` index can also tail creates for bulk ingest.
 
 ## Copyright
 
