@@ -1,0 +1,12 @@
+# Generated Maven and Daml build output
+**/target/
+**/.daml/dependencies/
+**/.daml/package-database/
+**/.daml/interfaces/
+**/.daml/dist/
+**/.daml/setup-package-db.lock
+
+# Canton runtime logs
+/log/
+**/demo/log/
+**/demo/.runtime/*.log
