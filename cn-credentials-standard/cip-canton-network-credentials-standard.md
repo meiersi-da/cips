@@ -445,7 +445,7 @@ We expect that a future CIP that standardizes CNS, potentially including identit
 
 A draft of the HTTP and Daml APIs, and of the DSO Credential Registry, is in [this Splice PR](https://github.com/hyperledger-labs/splice/pull/3416). It includes `Splice.Api.Credential.RegistryV1`, `openapi/credential-registry-v1.yaml`, and the DSO templates `AnsCredentialRegistry` and `AnsCredentialRecord`. It does not implement `Credential` on `AnsEntry`.
 
-Lookup pagination (`limit`, `pageToken`) is specified in that OpenAPI. The Bulk Credential Retrieval API is specified in this CIP. It is not a path in that yaml yet.
+Lookup pagination (`limit`, `pageToken`) is specified in that OpenAPI.
 
 ## Copyright
 
