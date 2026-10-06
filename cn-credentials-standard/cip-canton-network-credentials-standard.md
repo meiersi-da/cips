@@ -209,11 +209,70 @@ Credential registries MAY enforce limits on the credentials they store to avoid 
 
 #### Credential Factory Interface
 
-The purpose of this API is to enable anchorers and holders to create registered credentials in a third-party credential registry. `CredentialRegistryFactory_Issue(credential, registration)` requires the stable deduplicated union of anchorers followed by holders as controllers and checks the factory's anchorers and registry administrator against the supplied views. The registry administrator governs registered operations; a textual issuer does not authorize Daml choices. The specific workflows for obtaining issuer evidence and determining credential claims are outside this proposal.
+The purpose of this API is to enable anchorers and holders to create registered credentials in a third-party credential registry. The factory provides two entry points, because the obtainable authorization differs by issuer form. `CredentialRegistryFactory_Issue(credential, registration)` applies when the issuer is a Canton `Party`: it MUST assert the `W3C_VC_Identifier_Party` form and requires the stable deduplicated union of anchorers, holders, and that issuer Party as controllers. `CredentialRegistryFactory_Anchor(credential, registration)` applies when the issuer is an external text identifier: it MUST assert the `W3C_VC_Identifier` text form and requires only the stable deduplicated union of anchorers followed by holders as controllers, because no issuer authorization is obtainable. Both choices MUST check the factory's anchorers and registry administrator against the supplied views, and both return `CredentialRegistryFactory_IssueResult`, since either path yields the same registered-credential contract id. The registry administrator governs registered operations. The specific workflows for obtaining issuer evidence and determining credential claims are outside this proposal.
+
+The following abbreviated Daml sketch proposes the two entry points:
+
+```haskell
+-- | The issuer parties obtainable as Daml authorizers, empty for a text issuer.
+issuerParty : W3C_VC_Identifier -> [Party]
+issuerParty issuer = case issuer of
+  W3C_VC_Identifier_Party party -> [party]
+  W3C_VC_Identifier _ -> []
+
+data CredentialRegistryFactoryView = CredentialRegistryFactoryView with
+   registryAdmin : Party
+     -- ^ The party that administers this credential registry.
+   anchorers : NonEmpty Party
+     -- ^ The anchorers authorized to anchor credentials through this factory.
+ deriving (Eq, Show)
+
+data CredentialRegistryFactory_IssueResult = CredentialRegistryFactory_IssueResult with
+   issuedCredential : ContractId RegisteredCredential
+ deriving (Eq, Show)
+
+interface CredentialRegistryFactory where
+ viewtype CredentialRegistryFactoryView
+
+ credentialRegistryFactory_issueImpl : ContractId CredentialRegistryFactory -> CredentialRegistryFactory_Issue -> Update CredentialRegistryFactory_IssueResult
+ credentialRegistryFactory_anchorImpl : ContractId CredentialRegistryFactory -> CredentialRegistryFactory_Anchor -> Update CredentialRegistryFactory_IssueResult
+
+ -- | Issuance authorized by the issuing Canton party itself.
+ nonconsuming choice CredentialRegistryFactory_Issue : CredentialRegistryFactory_IssueResult
+   with
+     credential : CredentialView
+     registration : RegisteredCredentialView
+   controller (stableParties (toList credential.anchorers <> credential.holders <> issuerParty credential.issuer))
+   do
+     let factory = view this
+     assertMsg "Issue requires a Canton Party issuer" (case credential.issuer of
+       W3C_VC_Identifier_Party _ -> True
+       W3C_VC_Identifier _ -> False)
+     assertMsg "credential anchorers do not match the factory" (credential.anchorers == factory.anchorers)
+     assertMsg "registration administrator does not match the factory" (registration.registryAdmin == factory.registryAdmin)
+     credentialRegistryFactory_issueImpl this self arg
+
+ -- | Anchoring of a credential whose issuer is an external text identifier.
+ nonconsuming choice CredentialRegistryFactory_Anchor : CredentialRegistryFactory_IssueResult
+   with
+     credential : CredentialView
+     registration : RegisteredCredentialView
+   controller (stableParties (toList credential.anchorers <> credential.holders))
+   do
+     let factory = view this
+     assertMsg "Anchor requires an external textual issuer" (case credential.issuer of
+       W3C_VC_Identifier _ -> True
+       W3C_VC_Identifier_Party _ -> False)
+     assertMsg "credential anchorers do not match the factory" (credential.anchorers == factory.anchorers)
+     assertMsg "registration administrator does not match the factory" (registration.registryAdmin == factory.registryAdmin)
+     credentialRegistryFactory_anchorImpl this self arg
+```
+
+Because an external textual issuer cannot authorize a Daml choice, anchoring MUST NOT be presented as issuer-authorized issuance: it attests on-ledger publication by the anchorers only. A Party issuer MUST use `CredentialRegistryFactory_Issue` and MUST NOT bypass its own authorization through `CredentialRegistryFactory_Anchor`; each choice MUST therefore reject the issuer form that the other handles. Both choices are nonconsuming, so the factory remains available after either operation.
 
 Implementing this API is optional for credential registries. They CAN decide to only support registry internal workflows for creating credentials, and not offer third-party issuers the right to publish credentials to that registry.
 
-This API uses the factory pattern pioneered in CIP-56: the `CredentialRegistryFactory` Daml interface provides `CredentialRegistryFactory_Issue` to issue a credential with a separate registration view. A corresponding HTTP API endpoint MAY provide the context to call that choice.
+This API uses the factory pattern pioneered in CIP-56: the `CredentialRegistryFactory` Daml interface provides `CredentialRegistryFactory_Issue` and `CredentialRegistryFactory_Anchor` to create a credential with a separate registration view. A corresponding HTTP API endpoint MAY provide the context to call either choice.
 
 Draft specifications of these two interfaces can be found in the draft PR here:
 
