@@ -64,128 +64,156 @@ The Daml APIs mediate the on-ledger interactions of the different applications w
 
 A credential describes what its issuer asserts, who holds it, and when those claims are valid. Registration is an optional registry record of that credential, with its own administrator and retention period. The `Credential` and `RegisteredCredential` interfaces expose separate views of the same canonical contract when it is registered; a credential need not implement `RegisteredCredential` to exist or be used.
 
-The following Daml sketch proposes a separation of the interfaces in the [Splice draft](https://github.com/hyperledger-labs/splice/pull/3416/changes#diff-808147bf36f1c087a42b92d67d2021c2ca203076cc0e3b6a31f2ccc60497a34d):
+The following abbreviated Daml sketch proposes a separation of the interfaces in the [Splice draft](https://github.com/hyperledger-labs/splice/pull/3416/changes#diff-808147bf36f1c087a42b92d67d2021c2ca203076cc0e3b6a31f2ccc60497a34d):
 
 ```haskell
--- | A set of claims that define a credential analogous to W3C Verifiable Credentials.
-data Claims = Claims with
-   values : TextMap Text
-     -- ^ The values of the claims are encoded as key-value pairs to align with the
-      -- common use of key-value pairs in ENS, DNS, k8s, and similar systems. A
-      -- W3C claim of the form (subject, property, value) is represented as a
-      -- key-value pair with the key formed as "property!subject" and value as
-      -- "value".
-      --
-      -- When no '!subject' suffix is present in the key, the claim pertains
-      -- to the holder of the credential. Thus the key value pair
-      --
-      --  "cip-TBD/displayName" : "Alice"
-      --
-      -- corresponds to the W3C claim
-      -- (subject=holder, property="cip-TBD/displayName", value="Alice").
-      --
-      -- Implementations SHOULD ensure that claims are stored in canonical form without
-      -- redundant '!holder' suffixes in keys.
-      --
-      -- Keys MUST only contain characters from [a-zA-Z0-9._:/!-]
-      -- and the '!' is only allowed to be used to separate property from subject.
-      --
-      -- All keys MUST be namespaced in the form `namespace/property` to avoid collisions.
-      -- The namespace `cip-<nr>` is reserved for CIP-defined properties.
-      -- All other applications MUST use a Java-style reverse DNS name for a domain under their control.
-      -- For example, a key for a property `prop` defined by the domain
-      -- `example.com` would be `com.example/prop`.
-   validFrom : Optional Time
-     -- ^ The time from which this credential is valid.
-   validUntil : Optional Time
-     -- ^ The time until which this credential is valid.
-   meta : Metadata
-     -- ^ Metadata associated with these claims. Used for extensibility.
+-- | Imports: DA.NonEmpty (NonEmpty, toList), DA.TextMap (TextMap),
+-- | and Splice.Api.Token.MetadataV1 qualified as Api.Token.MetadataV1.
+stableParties : [Party] -> [Party]
+stableParties parties = case parties of
+  [] -> []
+  first :: rest -> first :: stableParties (filter (/= first) rest)
+
+data W3C_VC_Identifier
+   = W3C_VC_Identifier_Party Party
+   | W3C_VC_Identifier Text
+ deriving (Eq, Show)
+
+-- | Claims about one explicit subject, which need not be a holder.
+data CredentialSubject = CredentialSubject with
+   id : Optional W3C_VC_Identifier
+     -- ^ An unidentified subject MAY still carry claims.
+   claims : TextMap Api.Token.MetadataV1.AnyValue
+     -- ^ Typed property values; subject identity is not encoded in property keys.
  deriving (Eq, Show)
 
 -- | The intrinsic content of a credential.
 data CredentialView = CredentialView with
-   issuer : Party
-     -- ^ The party that issued the credential.
-   holder : Party
-     -- ^ The party that holds the credential.
-   claims : Claims
-     -- ^ The claims and their intrinsic validity period.
-   meta : Metadata
-     -- ^ Metadata associated with the credential. Used for extensibility.
+   id : Optional Text
+     -- ^ Optional credential identifier.
+   credentialTypes : [Text]
+     -- ^ Credential types for W3C alignment.
+   issuer : W3C_VC_Identifier
+     -- ^ Required issuer identity, either a Canton party or an external identifier.
+   validFrom : Optional Time
+     -- ^ The time from which the credential is valid.
+   validUntil : Optional Time
+     -- ^ The time until which the credential is valid.
+   credentialSubject : NonEmpty CredentialSubject
+     -- ^ One or more explicit subjects with typed claims.
+   holders : [Party]
+     -- ^ Holders MAY be empty; this is a list, not a Set.
+   anchorers : NonEmpty Party
+     -- ^ Canton parties providing mandatory ledger authority.
  deriving (Eq, Show)
 
 -- | A registry's record of a credential.
 data RegisteredCredentialView = RegisteredCredentialView with
-   admin : Party
+   registryAdmin : Party
      -- ^ The party that administers this credential registry.
-   createdAt : Optional Time
-     -- ^ The time at which this credential record was created.
+   registeredAt : Time
+     -- ^ The required time at which this credential record was registered.
    expiresAt : Optional Time
      -- ^ The time at which this credential record expires in the registry.
-     --
-     -- The registry MAY archive the record after this time.
-   meta : Metadata
-     -- ^ Metadata associated with this credential record. Used for extensibility.
+      --
+      -- The registry MAY archive the record after this time.
+   meta : TextMap Api.Token.MetadataV1.AnyValue
+     -- ^ Typed metadata associated with this registration. Used for extensibility.
  deriving (Eq, Show)
 
 -- | A credential, whether or not it is registered.
 interface Credential where
  viewtype CredentialView
 
- credential_archiveAsHolderImpl : ContractId Credential -> Credential_ArchiveAsHolder -> Update Credential_ArchiveAsHolderResult
- credential_publicFetchImpl : ContractId Credential -> Credential_PublicFetch -> Update CredentialView
+ credential_removeSelfAsHolderImpl : ContractId Credential -> Credential_RemoveSelfAsHolder -> Update Credential_RemoveSelfAsHolderResult
+ credential_archiveAsAllHoldersImpl : ContractId Credential -> Credential_ArchiveAsAllHolders -> Update Credential_ArchiveResult
 
- choice Credential_ArchiveAsHolder : Credential_ArchiveAsHolderResult
-   -- ^ Archive this credential as the holder.
-   --
-   -- This is always allowed for the holder of the credential and matches the real-world analogue
-   -- of them destroying their copy of the credential.
-   --
-   -- The view is returned for convenience so that the caller does not need to fetch it ahead of time.
-   controller (view this).holder
-   do credential_archiveAsHolderImpl this self arg
+ choice Credential_RemoveSelfAsHolder : Credential_RemoveSelfAsHolderResult
+   with holder : Party
+   controller holder
+   do
+     assertMsg "exercising party is not a credential holder" (elem holder (view this).holders)
+     credential_removeSelfAsHolderImpl this self arg
 
- nonconsuming choice Credential_PublicFetch : CredentialView
-   -- ^ Fetch the view of the credential.
-   --
-   -- Registries MAY restrict the actor in case the credential is not public.
-   with
-     expectedAdmin : Optional Party
-       -- ^ The expected registry admin, when fetching a registered credential.
-       -- Registered implementations MUST require `Some admin` matching their registry admin.
-       -- Callers SHOULD obtain it from a trusted source, e.g., their own participant,
-       -- and vet implementations that enforce the check. Use `None` for an unregistered credential.
-     actor : Party
-       -- ^ The party fetching the contract.
-   controller actor
-   do credential_publicFetchImpl this self arg
+ choice Credential_ArchiveAsAllHolders : Credential_ArchiveResult
+   controller (if null (view this).holders then toList (view this).anchorers else (view this).holders)
+   do credential_archiveAsAllHoldersImpl this self arg
 
-data Credential_ArchiveAsHolderResult = Credential_ArchiveAsHolderResult with
-   archivedCredential : CredentialView
-     -- ^ The view of the archived credential.
-   meta : Metadata
-     -- ^ Additional metadata specific to the archive operation, used for extensibility.
- deriving (Eq, Show)
+ choice Credential_ArchiveAsAnchorers : Credential_ArchiveResult
+   controller (toList (view this).anchorers)
+   do credential_archiveAsAllHoldersImpl this self Credential_ArchiveAsAllHolders
 
 -- | Optional registry view of the same credential contract.
 interface RegisteredCredential requires Credential where
  viewtype RegisteredCredentialView
+
+ registeredCredential_publicFetchImpl : ContractId RegisteredCredential -> RegisteredCredential_PublicFetch -> Update RegisteredCredentialView
+
+ nonconsuming choice RegisteredCredential_PublicFetch : RegisteredCredentialView
+   with
+     expectedRegistryAdmin : Party
+     actor : Party
+   controller actor
+   do
+     result <- registeredCredential_publicFetchImpl this self arg
+     assertMsg "unexpected registry administrator" (expectedRegistryAdmin == result.registryAdmin)
+     pure result
+
+-- | Optional intrinsic lifecycle, controlled by anchorers.
+interface CredentialLifecycle requires Credential where
+ viewtype CredentialView
+
+ choice CredentialLifecycle_Renew : CredentialLifecycle_RenewResult
+   with validUntil : Time
+   controller (toList (view this).anchorers)
+   do credentialLifecycle_renewImpl this self arg
+
+-- | Optional registration lifecycle.
+interface RegisteredCredentialLifecycle requires RegisteredCredential, CredentialLifecycle, Credential where
+ viewtype RegisteredCredentialView
+
+ choice RegisteredCredentialLifecycle_Renew : RegisteredCredentialLifecycle_RenewResult
+   with
+     expectedCredential : CredentialView
+     registryAdmin : Party
+     validUntil : Time
+     profileAuthorization : Optional (TextMap Api.Token.MetadataV1.AnyValue)
+     paymentEvidence : Optional (TextMap Api.Token.MetadataV1.AnyValue)
+   controller (stableParties (toList expectedCredential.anchorers <> [registryAdmin]))
+   do registeredCredentialLifecycle_renewImpl this self arg
+
+ choice RegisteredCredentialLifecycle_ExtendRegistration : RegisteredCredentialLifecycle_ExtendRegistrationResult
+   with
+     expectedCredential : CredentialView
+     registryAdmin : Party
+     expiresAt : Time
+   controller (stableParties (toList expectedCredential.anchorers <> [registryAdmin]))
+   do registeredCredentialLifecycle_extendRegistrationImpl this self arg
 ```
 
-`Claims.validUntil` defines intrinsic validity; `RegisteredCredentialView.expiresAt` defines registry retention. They MAY differ or be absent independently and MUST NOT be required to advance together. Extending registration retention MUST NOT extend or renew intrinsic validity. A registration that expires does not invalidate a still-valid credential; a credential whose intrinsic validity has ended does not become valid because its registration remains active. A registry MAY impose admission constraints on intrinsic validity relative to registration time, without coupling the two expiry fields.
+`CredentialView.validUntil` defines intrinsic validity; `RegisteredCredentialView.expiresAt` defines registry retention. They MAY differ or be absent independently and MUST NOT be required to advance together. Extending registration retention MUST NOT extend or renew intrinsic validity. A registration that expires does not invalidate a still-valid credential; a credential whose intrinsic validity has ended does not become valid because its registration remains active. A registry MAY impose admission constraints on intrinsic validity relative to registration time, without coupling the two expiry fields.
 
-The DSO registry's consistency check between `validFrom`, `validUntil`, and `createdAt` concerns admission of a record, not equality between intrinsic validity and registration expiry. Its unpaid replacement-credential renewal remains distinct from extending the retention of an existing registration.
+The DSO registry's consistency check between `validFrom`, `validUntil`, and `registeredAt` concerns admission of a record, not equality between intrinsic validity and registration expiry. Its unpaid replacement-credential renewal remains distinct from extending the retention of an existing registration. A paid extension MUST change registration retention only, not intrinsic validity.
+
+The issuer MUST be identified by `W3C_VC_Identifier`, either a Canton `Party` or an external text identifier. An external textual issuer cannot control a Daml choice. Anchorers MUST be nonempty Canton parties providing ledger authority; they are not necessarily issuers. Anchoring proves neither the issuer's signature nor the truth of its claims. Holders MAY be empty. Contract signatories MUST be the stable deduplicated union of anchorers followed by holders: `holders` remains a list, not a Daml Set, and deduplication occurs when computing signatories.
+
+Each credential MUST have at least one explicit `CredentialSubject`; each subject has typed claims and MAY omit its `id` without losing its claims. For example, Alice can hold a credential stating that ACME has an active licence: the subject id identifies ACME and its `licenseStatus` claim is `active`. Under the earlier encoding this required `licenseStatus!ACME`, whereas bare `licenseStatus` described Alice as holder. Subject identity MUST NOT be inferred from the absence of a suffix in the new credential view.
+
+##### Key-prefix query compatibility
+
+Registries needing the earlier key-prefix query convention MAY expose a compatibility projection derived from explicit subjects. This proposal does not define that projection. Existing key examples in the discovery sections are retained unchanged pending a separate proposal; they MUST NOT be read as defining the encoding of `CredentialSubject`.
+
+The lifecycle interfaces distinguish `CredentialLifecycle_Renew`, which advances only intrinsic `validUntil`, from `RegisteredCredentialLifecycle_ExtendRegistration`, which advances only registration `expiresAt`. `RegisteredCredentialLifecycle_Renew` renews intrinsic validity for a registered credential, with anchorer and registry-admin authorization; it MUST NOT implicitly extend retention. The extension choice likewise requires the anchorers and registry admin, and MUST NOT renew intrinsic validity. Both renewal choices and extension require an existing expiry and a strictly later new expiry; registered choices MUST check the expected credential and registry administrator. `Credential_RemoveSelfAsHolder` allows a listed holder to remove themselves from a replacement credential; `Credential_ArchiveAsAllHolders` requires all holders (or anchorers if there are no holders), while `Credential_ArchiveAsAnchorers` requires anchorers. Offer/Accept, AddHolder, suspension, resumption, and revocation are NOT defined by this proposal.
 
 Credential registries MAY enforce limits on the credentials they store to avoid operational problems from overly large credentials. The limits are communicated to users via the [Credential Registry Info API](#credential-registry-info-api). See [Rationale > DSO Credential Registry Limits](#dso-credential-registry-limits) for the concrete limits enforced by the SV operated registry.
 
 #### Credential Factory Interface
 
-The purpose of this API is to enable credential issuers and holders to *jointly* create, update, and archive registered credentials in a third-party credential registry. The above Daml API requires joint authorization by issuer and holder upon creation of the credential. The specific workflows for obtaining this authorization and determining the claims of the credential are provided by the issuer and implemented in their credential issuance app.
+The purpose of this API is to enable anchorers and holders to create registered credentials in a third-party credential registry. `CredentialRegistryFactory_Issue(credential, registration)` requires the stable deduplicated union of anchorers followed by holders as controllers and checks the factory's anchorers and registry administrator against the supplied views. The registry administrator governs registered operations; a textual issuer does not authorize Daml choices. The specific workflows for obtaining issuer evidence and determining credential claims are outside this proposal.
 
 Implementing this API is optional for credential registries. They CAN decide to only support registry internal workflows for creating credentials, and not offer third-party issuers the right to publish credentials to that registry.
 
-This API uses the factory pattern pioneered in CIP-56: the `CredentialFactory` Daml interface provides a choice `CredentialFactory_UpdateCredentials` that allows for a bulk update of credentials with the same issuer and holder. A corresponding HTTP API endpoint allows retrieval of the context to call that choice.
+This API uses the factory pattern pioneered in CIP-56: the `CredentialRegistryFactory` Daml interface provides `CredentialRegistryFactory_Issue` to issue a credential with a separate registration view. A corresponding HTTP API endpoint MAY provide the context to call that choice.
 
 Draft specifications of these two interfaces can be found in the draft PR here:
 
@@ -196,7 +224,7 @@ Draft specifications of these two interfaces can be found in the draft PR here:
 
 We expect applications to be able to `fetch` credentials as part of their Daml workflows using the `Credential` interface to fetch the contract and compute its `CredentialView`. The workflow thereby gets access to full `CredentialView` and can use its data to influence its actions.
 
-We also expect wallets to be able to list all credentials held by their user by asking the user’s validator node for all active contracts implementing the `Credential` interface. Wallets can offer the user to archive an unwanted credential using the `Credential_ArchiveAsHolder` choice. We also expect that wallets can offer the user to open the credential issuer’s custom dApp for managing that credential. We expect them to be able to do as explained in [Standardized Application and Metadata Discovery](#standardized-application-and-metadata-discovery).
+We also expect wallets to be able to list all credentials held by their user by asking the user’s validator node for all active contracts implementing the `Credential` interface. Wallets can offer a holder the `Credential_RemoveSelfAsHolder` choice for an unwanted credential, or coordinate archival through `Credential_ArchiveAsAllHolders`. We also expect that wallets can offer the user to open the credential issuer’s custom dApp for managing that credential. We expect them to be able to do as explained in [Standardized Application and Metadata Discovery](#standardized-application-and-metadata-discovery).
 
 Note that apps and users that want to use credentials from a specific registry on-ledger must vet the .dars of that credential registry.
 
