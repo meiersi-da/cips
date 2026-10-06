@@ -177,7 +177,7 @@ The purpose of this API is to enable credential issuers and holders to *jointly*
 
 Implementing this API is optional for credential registries. They CAN decide to only support registry internal workflows for creating credentials, and not offer third-party issuers the right to publish credentials to that registry.
 
-This API uses the factory pattern pioneered in CIP-56: the `CredentialFactory` Daml interface provides a choice `CredentialFactory_UpdateCredentials` that allows for a bulk update of credentials with the same issuer and holder. A corresponding HTTP API endpoint allows retrieval of the context to call that choice.
+This API uses the factory pattern pioneered in CIP-56: the `CredentialFactory` Daml interface provides a choice `CredentialFactory_UpdateCredentials` that allows for a bulk update of credentials with the same issuer and holder. The choice takes `newCreatedAt`, the creation time of the new record. Callers supply it so that implementations can compute expiry without `getTime`. A corresponding HTTP API endpoint allows retrieval of the context to call that choice.
 
 Draft specifications of these two interfaces can be found in the draft PR here:
 
@@ -207,7 +207,7 @@ A draft API is specified in [openapi/credential-registry-v1.yaml](https://github
 
 The purpose of the credential lookup API is to allow a rich set of retrieval operations to be directly implemented on top of any credential registry under the constraint that the indexing overhead for credential registries is manageable.
 
-A draft API is specified in [openapi/credential-registry-v1.yaml](https://github.com/hyperledger-labs/splice/pull/3416/changes#diff-a73145dfdb26770f01b5fc0a9f35c7c34f067584acb6ec16de7e82040df6f835). It supports filtering by holder, multiple issuers, and a key prefix. The resolution of multiple entries for the same key is left to the client of the API. The API MUST include the record time of the transaction that created the credential contract. Record time is the Canton protocol sequencing time of that transaction's confirmation request. Clients that implement last-write-wins select the credential with the latest record time. A client that needs a deterministic winner MAY break a tie on record time by selecting the credential whose contract id is lexicographically smaller, using the contract-id string returned by the API. A client for which that tie means the name does not resolve does not select a winner. The API returns matches ordered by matched claim key ascending, then record time descending, then contract id ascending. Within one key, the first record is the last-write-wins winner.
+A draft API is specified in [openapi/credential-registry-v1.yaml](https://github.com/hyperledger-labs/splice/pull/3416/changes#diff-a73145dfdb26770f01b5fc0a9f35c7c34f067584acb6ec16de7e82040df6f835). It supports filtering by holder, multiple issuers, and a key prefix. The resolution of multiple entries for the same key is left to the client of the API. The API MUST include the record time of the transaction that created the credential contract. Record time is the Canton protocol sequencing time of that transaction's confirmation request. Clients that implement last-write-wins select the credential with the latest record time among records whose `expiresAt` is absent or has not passed. The API still returns records whose `expiresAt` is in the past. A client that needs a deterministic winner MAY break a tie on record time by selecting the credential whose contract id is lexicographically smaller, using the contract-id string returned by the API. A client for which that tie means the name does not resolve does not select a winner. If every record for that key has an `expiresAt` in the past, the client does not select a winner. The API returns matches ordered by matched claim key ascending, then record time descending, then contract id ascending. Within one key, the winner is the first returned record whose `expiresAt` is absent or has not passed.
 
 By default the API only returns the `CredentialView` of a credential. It optionally also includes the underlying contract so that it can be disclosed for usage in a Daml transaction that reads the credential.
 
@@ -223,31 +223,36 @@ A decentralized credential registry is implemented as an extension of the Amulet
 It implements all the APIs defined above side-by-side with the existing ANS 1.0 APIs.
 
 By default, there is no CC payment required for creating credential records in the registry.
-Instead, the registry expires the records within 90 days (configurable by SV voting),
+Instead, the registry expires the records at the end of a free period, 90 days by default (configurable by SV voting),
 so that the traffic cost of creating and renewing them covers their storage cost.
 This CIP does not define automatic renewal. Unpaid renewal is a new credential with the same claims. Last-write-wins under Lookup prefers it. Applications SHOULD create that replacement about 24 hours before `expiresAt`, so prepared transactions on the old contract id are less likely to contend with archival.
 
 ### Extended Expiration Durations
 
-The registry optionally supports extending the expiration duration of records by more than 90 days by burning a CC fee (default 1 $/year, configurable by SV voting).
-The burn is executed by performing a CC transfer to the `cip-112/burn` account defined in
-CIP-112, with:
+The registry optionally supports extending the expiration duration of records beyond that free period by burning a CC fee (default 1 $/year, configurable by SV voting).
+The duration beyond the free period for a record is the USD value of the CC burned for that record, divided by the $/year fee.
+If no CC is burned for that record, that duration is zero.
+`expiresAt` is `newCreatedAt` plus the free period plus that duration.
+The same formula applies when the credential is created and extended in the same transaction.
+If `validUntil` is set, the resulting `expiresAt` is not later than `validUntil`.
+`CredentialFactory_UpdateCredentials` creates one credential per element of `newCredentialClaims`.
+The caller may add `cip-TBD/credential-burns` to the choice context returned by the registry HTTP API.
+If that key is absent, no CC is burned.
+If it is present, its value is an `AV_List` of the same length as `newCredentialClaims`. A different length is rejected.
+Element i is an `AV_Map` for the i-th new credential, with `sender` as `AV_Party`, `amount` as `AV_Decimal`, and `holdings` as an `AV_List` of `AV_ContractId`.
+`sender` is the holder or the issuer. Any other sender is rejected.
+`holdings` are that sender's CC contracts. Holdings of any other party are rejected.
+If `amount` is less than zero, the choice rejects the call.
+A zero amount burns nothing for that credential.
+When the amount is greater than zero, the choice, after creating that credential, transfers that sender's CC to the `cip-112/burn` account defined in CIP-112.
+The holder and the issuer both authorize `CredentialFactory_UpdateCredentials`, and that authorization covers this transfer.
+The choice fills the rest of the transfer. That transfer's `extraArgs.context` carries:
 
-- `cip-TBD/extend-credential-expiry-to` set to the new expiration time. On Token Standard V2
-  this is a key in `extraArgs.meta`. On Token Standard V1 compatibility mode it is a
-  query-parameter memo tag on a transfer whose receiver is the special party
-  `cip-TBD_extend-credential-expiry::1220000000000000000000000000000000000000000000000000000000000000abcd`
-  (`TBD` is this CIP's assigned number), matching the traffic-purchase compatibility mode.
-- `cip-TBD/credential-contract-id` set to the credential being extended. This value is a
-  `ContractId` and MUST be passed as `AV_ContractId` under `cip-TBD/cid-meta` in
-  `extraArgs.context`, not as `Text` metadata. Callers MUST overwrite that context key
-  on the choice context returned by the registry HTTP API.
+- `cip-TBD/credential-contract-id` set to that credential's contract id.
+  The choice writes it as `AV_ContractId` under `cip-TBD/cid-meta`, not as `Text`. Callers do not set this key.
 
-The payment requires authorization from the sender of the funds and from at least one of the credential issuer or holder.
-
-This authorization policy is chosen to allow credential issuance apps to extend the expiration of a credential on behalf of the issuer or holder, as part of an app's workflow.
-For example by creating the credential and extending its expiration in the same
-transaction.
+A credential issuance app prepares this transaction for the holder and the issuer.
+For example, it creates the credential and extends its expiration in the same transaction.
 
 ### DSO Credential Registry Limits
 
@@ -273,7 +278,7 @@ The APIs are implemented as follows:
 3. The Scan app proxy served by the validator app implements the [openapi/credential-registry-v1.yaml](https://github.com/hyperledger-labs/splice/pull/3416/changes#diff-a73145dfdb26770f01b5fc0a9f35c7c34f067584acb6ec16de7e82040df6f835), calling out to multiple Scan apps and comparing the results to implement BFT reads.
 4. The SV app is extended with automation ensuring that there is exactly one `AnsCredentialRecord` self-published by the `dso` party, which announces the URLs of the Scan apps serving the off-ledger APIs of the DSO Credential Registry.
 
-A generic Token Standard V1 send can set the receiver and a memo, and still cannot set `extraArgs.context`. Wallets that can only set those two fields go through the credential issuer's dApp, which prepares the transaction. Token Standard V2 extraArgs can carry both the expiration time and the contract id.
+A generic Token Standard V1 send can set the receiver and a memo, and still cannot set `extraArgs.context`. Wallets that can only set those two fields go through the credential issuer's dApp, which prepares the transaction. The registry choice writes the contract id onto each burn it performs.
 
 ## Standardized Application and Metadata Discovery
 
