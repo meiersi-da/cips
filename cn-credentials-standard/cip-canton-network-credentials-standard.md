@@ -264,7 +264,7 @@ so that the traffic cost of creating and renewing them covers their storage cost
 
 ### Extended Expiration Durations
 
-The registry optionally supports extending the expiration duration of records by more than 90 days by burning a CC fee (default 1 $/year, configurable by SV voting). This paid extension changes registration retention only; it MUST NOT extend `Claims.validUntil` or renew the credential.
+The registry optionally supports extending the expiration duration of records by more than 90 days by burning a CC fee (default 1 $/year, configurable by SV voting). This paid extension changes registration retention only; it MUST NOT extend `CredentialView.validUntil` or renew the credential.
 This burn is executed by performing a CC transfer to the `cip-112/burn` account defined in
 [CIP-112](https://github.com/canton-foundation/cips/blob/main/cip-0112/cip-0112.md#4321-special-account-identifiers-for-mint-and-burn) (Token Standard V2) with the following two extra arguments of `V2.TransferFactory_Transfer`:
 
