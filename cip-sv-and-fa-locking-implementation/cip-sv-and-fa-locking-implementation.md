@@ -59,24 +59,28 @@ Governance locks:
 
 Two wallet integration options are supported:
 
-1. **Full feature integration:** the full feature set of governance locks can be used with any wallet supporting the [CIP-112](../cip-0112/cip-0112.md) Token Standard V2 (TSv2) APIs with custom [extended metadata](#support-for-extended-metadata).
+1. **Full feature integration:** all workflows described in this CIP will be exposed via Daml interface APIs for staking apps and wallets to integrate with.
 2. **Compatibility mode:** a compatibility mode with a reduced feature set allows using any wallet that supports [CIP-56](../cip-0056/cip-0056.md) Token Standard V1 (TSv1) two-step transfers to create locks, unlock them, and withdraw vested funds in daily tranches.
 
-The full feature integration requires TSv2 support, as the TSv1 APIs are not expressive enough to represent governance locks and all actions on them. The compatibility mode serves to enable the initial deployment of SV and FA locks without depending on wallet providers to immediately complete TSv2 support.
+The compatibility mode enables the initial deployment of SV and FA locks without requiring wallets to support the full-feature workflows.
+It will remain available alongside the full feature integration.
 
-We expect the wallet ecosystem to migrate over time to full feature integrations based on the TSv2 APIs. Some might even go further and build dedicated UIs for interacting with governance locks. We further expect the TSv2 APIs to be used by all apps (e.g., staking apps) that want to interact with governance locks. See [Wallet Integration Details](#wallet-integration-concerns) for details on the wallet integration.
-
-#### Extra Parameters
-
-Extra parameters and data are communicated over the TSv2 APIs via metadata keys prefixed by `cip-127/`. Communicating this data via metadata keys allows reading and setting them via the generic metadata support of wallets. See the section on [Support for Extended Metadata](#support-for-extended-metadata) for details on how wallets are expected to provide this support.
+We expect the wallet ecosystem to migrate over time to full feature integrations with  dedicated UIs for interacting with governance locks.
+We further expect the Daml inteface APIs to be used by all apps (e.g., staking apps) that want to interact with governance locks.
+See [Wallet Integration Details](#wallet-integration-concerns) for details on the wallet integration.
 
 ### Lock Lifecycle
 
-The following sections describe the lock lifecycle based on the TSv2 APIs. See the final section, titled [Compatibility Mode Lifecycle](#compatibility-mode-lifecycle), for details on how the lock lifecycle works when using the compatibility mode based on TSv1 two-step transfers.
+The following sections describe the lock lifecycle.
+See the final section, titled [Compatibility Mode Lifecycle](#compatibility-mode-lifecycle),
+for details on how the lock lifecycle works when using the compatibility mode based on TSv1 two-step transfers.
 
 #### Creation
 
-All locks are created by the lock owner creating a TSv2 allocation with special metadata that identifies it as a governance lock. The metadata specifies the lock type (FA or SV), the lock subject, and the custom controllers for the unlock, withdraw and substitution actions explained below.
+All locks are created by the lock owner.
+They must specify the lock type (FA or SV), the lock subject, and the lock amount.
+They may also specify custom controllers for the unlock, withdraw and substitution actions explained below.
+They may further specify custom metadata, e.g., to tag the locks with an application-specific identifier.
 
 ##### Controllers on Lock Actions
 
@@ -105,7 +109,8 @@ In this example, they are chosen such that `S` can automate the withdrawal or su
 
 #### Unlocking
 
-The parties specified as unlock controllers on a governance lock can request unlocking of (part of) a lock. They do so using their TSv2 wallet to request withdrawing the allocation representing the lock. Once enough unlock controllers have requested the unlocking, the lock is converted into a vesting lock with the vesting schedule parameters taken from the SV and FA lock vesting parameters managed via SV governance.
+The parties specified as unlock controllers on a governance lock can request unlocking of (part of) a lock.
+Once enough unlock controllers have requested the unlocking, the lock is converted into a vesting lock with the vesting schedule parameters taken from the SV and FA lock vesting parameters managed via SV governance.
 
 By default the whole locked amount is unlocked at once. A specific amount can be unlocked by passing the amount as metadata.
 
@@ -115,7 +120,7 @@ CIP-0116 requires featured app providers to prove that they have sufficient fund
 
 ##### Withdrawing Vested Funds
 
-The vesting controllers of a vesting lock can request to withdraw the vested amount from a vesting lock and return it to the lock owner as liquid CC. They do so using their TSv2 wallet to request withdrawing the allocation representing the vesting lock.
+The vesting controllers of a vesting lock can request to withdraw the vested amount from a vesting lock and return it to the lock owner as liquid CC.
 
 The release of vested amounts works in a pull-based fashion: the vesting controllers specify the time up to which vested funds should be computed and released. Provided this time is (a) in the past, (b) later than the creation of the vesting lock, and (c) later than the last time of withdrawal, the funds are released to the lock owner. If no locked funds remain, then the lock is archived.
 
@@ -176,7 +181,7 @@ Note that the amount vesting and the vesting start are changed to represent the 
 
 #### Substitution
 
-Funds owners can create a proposal to use their funds to substitute some (or all) of the locked amount of an existing lock. Substitution works for all types of locks independently of whether they are vesting or not. Substitutions of vesting locks are approved by the vesting controllers, while substitutions of non-vesting locks are approved by the substitution controllers. The new lock to be created is specified as part of the substitution. While it must have the same type as the existing lock, it can have different controllers and [metadata](#metadata-usage).
+Funds owners can create a proposal to use their funds to substitute some (or all) of the locked amount of an existing lock. Substitution works for all types of locks independently of whether they are vesting or not. Substitutions of vesting locks are approved by the vesting controllers, while substitutions of non-vesting locks are approved by the substitution controllers. The new lock to be created is specified as part of the substitution. While it must have the same type as the existing lock, it can have different controllers and [app-specific metadata](#app-specific-metadata).
 
 A substitution generally results in two locks of the same type with the same lock subject whose total amount is equal to the amount of the existing lock. The substituted funds in the existing lock are released as liquid CC to the lock owner of the existing lock. Locks whose locked amount would be zero are not created.
 
@@ -496,7 +501,7 @@ Note that new SVs will need to lock the minimum lock amount once they are onboar
 
 #### Compatibility Mode Lifecycle
 
-Funds owners whose wallets do not support the TSv2 allocation APIs can use TSv1 two-step transfers to create a lock whose unlocking, substitution, and withdrawal is controlled by the funds owner itself.
+Funds owners whose wallets do not provide a full-feature integration can use TSv1 two-step transfers to create a lock without app-specific metadata and whose unlocking, substitution, and withdrawal is controlled by the funds owner itself.
 
 They do so by initiating a TSv1 transfer to a special party with a memo tag that names the lock subject. Concretely, the parameters for the different types of locks are:
 
@@ -826,9 +831,9 @@ We propose an incremental delivery that focuses first on on-chain enforcement of
 
 1. **Compatibility mode for SV locks:** implement the compatibility mode based on the TSv1 APIs for creating SV locks. Locks must always lock an SV determined minimal amount of CC.
 2. **Compatibility mode for FA locks:** implement the compatibility mode based on the TSv1 APIs for creating (provisional) FA locks; and add SV automation to convert provisional into full FA locks once the corresponding featured app right is created.
-3. **Basic SV and FA locks and non-default controllers:** add support to use the TSv2 APIs to interact with SV and (provisional) FA locks and to create SV and (provisional) FA locks with custom controllers for unlocking, substitution and withdrawal.
-4. **Substitution and transfers for SV and FA locks:** add support to use the TSv2 APIs to propose substitutions and transfers of (vesting) SV and FA locks as described in the section on [Substitution](#substitution) and [Transfers](#transfers).
-5. **Topups and Merges for SV and FA locks:** add support to use the TSv2 APIs to execute topups and merges including the ability to mint SV rewards directly in locked form into an existing SV lock.
+3. **Basic SV and FA locks and non-default controllers:** support creating and interacting with SV and (provisional) FA locks, including custom controllers for unlocking, substitution and withdrawal.
+4. **Substitution and transfers for SV and FA locks:** support proposing substitutions and transfers of (vesting) SV and FA locks as described in the section on [Substitution](#substitution) and [Transfers](#transfers).
+5. **Topups and Merges for SV and FA locks:** support topups and merges, including minting SV rewards directly in locked form into an existing SV lock.
 6. **Automatic enforcement of FA underlocking:** FA underlocks are tracked and automatically enforced after a seven day grace period.
 7. **SV lock top-up automation:** extend the minting automation of validator nodes to mint a target percentage of SV rewards in locked form.
 8. **Termination of SV lock-up requirements:** allow SVs to vote on terminating the SV lock-up requirement upon which all funds can be fully withdrawn without any vesting from both SV locks and vesting SV locks.
@@ -845,7 +850,7 @@ Analogous to the incremental delivery, we propose to incrementally move the enfo
    2. Once that is activated at time `t`, they use their dashboards to determine the lifetime SV rewards up to time `t` and reflect that on-chain by creating corresponding SV votes.
    3. Once all lifetime rewards have been reflected on-ledger, the foundation can stop monitoring and enforcing SV underlocks via manual SV votes.
 
-Note that in Step 1, the SVs can create and manage their locks using any TSv1 wallet with support for two-step transfers. They will be able to use substitutions and transfers, as soon as the “Substitution and Transfers for SV and FA locks” feature lands on MainNet and their wallets support substitution and transfers either directly or via TSv2 support with generic extended metadata.
+Note that in Step 1, the SVs can create and manage their locks using any TSv1 wallet with support for two-step transfers. They will be able to use substitutions and transfers as soon as the “Substitution and Transfers for SV and FA locks” feature lands on MainNet and their wallets support those workflows through a full-feature integration.
 
 ### Migration to On-Chain Enforcement of FA Locks
 
@@ -860,25 +865,9 @@ We propose that the feature set considered for Increment 1 consists of the FA lo
 
 The subsections within this technical specification provide additional details on implementation aspects relevant to the integration of governance locks with wallets or apps. They rely on the full high-level specification as context, and where possible they refer to code of the [Reference Implementation](#reference-implementation) to avoid duplicating technical details.
 
-### Metadata Usage
+### App-Specific Metadata
 
-In the context of this CIP, metadata is used in three distinct ways:
-
-1. **Passing extra choice parameters:** actions on locks like unlocking a partial amount require passing in the amount to the `V2.Allocation_Withdraw` choice ([code](https://github.com/canton-network/splice/blob/ce85b796223b92267877a79a76ab6bb3b5a9949a/token-standard/splice-api-token-allocation-v2/daml/Splice/Api/Token/AllocationV2.daml#L304-L330)). This is done by encoding the amount under the `cip-127/unlock-amount` key in the `extraArgs.meta` field of the choice.
-2. **Communicating lock-specific data:** wallets retrieve locks using the `V2.AllocationView`. Lock-specific data like the lock subject are encoded in their `meta` fields under keys prefixed with `cip-127/`, so that wallets can parse and show it to their users.
-3. **Storing app-specific data on locks:** apps may need to store additional data (e.g., an app internal identifier) on a lock in a way that persists across changes to the lock. They can do so by storing that data in the `.meta` field of the `V2.AllocationSpecification` ([code](https://github.com/canton-network/splice/blob/ce85b796223b92267877a79a76ab6bb3b5a9949a/token-standard/splice-api-token-allocation-v2/daml/Splice/Api/Token/AllocationV2.daml#L98-L139)) that they pass when creating a lock. The implementation guarantees to carry along this metadata on governance locks unchanged.
-
-All metadata keys used in this CIP are prefixed with `cip-127/`. We refrain from listing the keys for all lock data and actions in the CIP text itself. We instead refer to the reference implementation here.
-
-This CIP also depends on the following support for encoding contract-ids as extended metadata.
-
-#### Support for Extended Metadata
-
-Normal Token Standard metadata ([code](https://github.com/canton-network/splice/blob/ce85b796223b92267877a79a76ab6bb3b5a9949a/token-standard/splice-api-token-metadata-v1/daml/Splice/Api/Token/MetadataV1.daml#L53-L66)) does not support storing (lists of) contract-ids, as Daml does not support conversions between `Text` and `ContractId` values for technical reasons. Substitutions and top-ups require passing in such values. We propose to do so using the following generic approach that builds on the `ChoiceContext` and `AnyValue` types from the `splice-api-token-metadata-v1` package ([code](https://github.com/canton-network/splice/blob/99e962c4f4162e783d50ca4b9cf4202ddd4befb7/token-standard/splice-api-token-metadata-v1/daml/Splice/Api/Token/MetadataV1.daml#L10-L47)).
-
-Contract-id metadata is passed in via the `context : ChoiceContext` field in the `ExtraArgs` of the token standard choices. They are stored under the key `cip-127/cid-meta` as an `AV_Map` value containing mappings from metadata keys to `AV_ContractId` or `AV_List` values.
-
-Whether these values are parsed depends on whether a choice implementation path that requires them is selected by the caller via normal metadata. Callers that do so MUST always overwrite the `cip-127/cid-meta` key in the choice context returned from the off-ledger API of the token standard registries to avoid that a dishonest off-ledger API overwrites their preferred value.
+Apps may associate metadata with a lock, such as an application-specific identifier. The Daml interface APIs for governance locks must allow apps to read and set this metadata. Workflows that retain or update a lock must preserve its metadata. Workflows that create new locks must allow specifying the metadata for the newly created lock.
 
 ### Controller Consensus on Withdrawal and Unlock Times
 
@@ -912,31 +901,6 @@ Locked holdings with expired locks ([code](https://github.com/canton-network/spl
 
 This concern is not specific to this CIP. It already applies to working with the locked holdings backing an expired token standard allocation or two-step transfer. We call it out here to ensure that wallet providers are aware of it.
 
-#### Dual Interface Implementations
-
-Governance locks created implement both the `V1.TransferInstruction` interface and the `V2.Allocation` interface. This implies that a TSv2 wallet might show them both in the list of pending transfer instructions and the list of allocations. We recommend that TSv2 wallets hide transfer instructions that are addressed to one of the three special parties used in the compatibility mode to reduce user confusion.
-
-#### Integration Options
-
-Wallets have two options for building full support for governance locks:
-
-1. Support TSv2 allocations with generic extended metadata
-2. Build governance lock specific UIs on top of the TSv2 allocation APIs
-
-We describe both options in the sections below. It is up to wallet providers to choose the appropriate option based on their user-base, implementation synergies and priorities. The options are not conflicting, and some wallet providers may even end up implementing both.
-
-##### Option 1: TSv2 Allocations with Generic Extended Metadata
-
-Building support for TSv2 allocations means building the UIs to support the allocation workflows described in [CIP-112](https://lists.sync.global/g/cip-discuss/message/743). This work has independent value, as it enables wallet users to use applications that rely on their [more powerful functionality](https://lists.sync.global/g/cip-discuss/message/743).
-
-For wallet users to use these UIs to interact with governance locks, the UIs must also support displaying and setting metadata on allocation specifications and views, and passing in generic extended metadata on allocation choices. This work also has independent value, as it enables wallet users to make use of this extension point for both governance locks as well as future extensions.
-
-##### Option 2: Build Governance Lock Specific UIs
-
-The drawback of Option 1 is that users must set the right metadata parameters on their own with minimal support from the wallet UI. Wallet providers may decide to improve on this by building custom forms for setting the right metadata parameters. They may also present the known metadata parameters for governance locks with better labels and rendering.
-
-Building such custom UIs for governance locks improves the UX of their users that manage the locks themselves. It is less relevant for users that use a third-party staking app to lock their funds.
-
 ### New Network Configuration Parameters
 
 This CIP introduces multiple new network configuration parameters that govern the behavior of governance locks and can be changed using SV voting. All of them are called out explicitly in the high-level specification section which they affect. A full listing of them together with their concrete names can also be found in the reference implementation here (TODO: link to the new config record(s), which include comments).
@@ -961,7 +925,7 @@ Note that Priority 3 is implied by Priority 2, as a well-functioning credit mark
 
 The above priorities also reflect in the following alternatives that we considered and rejected for particular implementation choices.
 
-* **Use TSv2 exclusively:** building only one interface between wallets and governance locks would lower the implementation cost, but it would also delay the transition to on-chain SV locks until all of their custodians have implemented support for TSv2. Adding the compatibility mode accelerates the transition at low cost.
+* **Rely on full-feature integration exclusively:** building only one interface between wallets and governance locks would lower the implementation cost, but it would delay the transition to on-chain SV locks until all of their custodians have completed a full-feature integration. Adding the compatibility mode accelerates the transition at acceptable cost.
 * **Allow substitutions to change the lock subject:** technically the substitution operation could also allow changing the lock subject, which would provide interesting flexibility to funds providers. However it likely would reduce the total value locked on-chain. For example, FA providers would have way less “skin in the game”, as they could just walk away from their current FA right, and transition their locked funds to a new FA party with a new right.
 * **Make transfers a special case of substitutions:**
   in principle, substitutions could specify both a `substitutedAmount` that determines the funds provided by the new owner and a `transferAmount` that determines the funds being transferred from the current owner to the new owner. This would technically allow transfers to be modeled as substitutions.
@@ -974,7 +938,6 @@ The above priorities also reflect in the following alternatives that we consider
 * **No grace period for permanent removal of underlocked FA rights:** CIP-0116 stipulates that “If locking falls below required thresholds, Featured App status is immediately removed.” Enforcing this strictly would imply that a single operational mistake on a single FA lock would make an FA provider lose their FA status and force them to go through the manual process of reapplying for it. We consider this unnecessary operational overhead, which is why this CIP proposes to immediately suspend the FA status on underlocking, but only permanently revoke it after a grace period.
 * **Switch SV reward minting flows to TBAR:** there were initial considerations of switching SV rewards minting to use the same off-ledger computations as the ones used for traffic-based app rewards. This would allow for slightly less delayed underlock enforcement, as it could be computed exactly as of round start instead of being delayed by about 30s. However the implementation effort for doing this switch is significantly higher than the one for adapting the existing SV reward minting flow.
 * **No minimum lock amount:** the minimum lock amount requirement does complicate the operations of staking apps and it would be great to not have it. However without a minimum lock amount there’s a risk that staking apps do produce lots of small locks. A situation that’s similar to how some wallets used to produce lots of “dust” CC holdings, e.g., as part of marketing campaigns. Every lock does consume resources on SV nodes. A minimum lock amount avoids having to spend delivery resources on scalability problems resulting from “dust locks”.
-* **Define a governance-lock specific Daml interface:** the metadata-based interface for interacting with governance locks requires staking apps to build extra decoding and encoding logic. Defining a governance-lock specific Daml interface would obviate the need for this logic. We do not do so, as we believe sharing the interface definitions with wallets and making use of the extension points in the token standard has lower overall delivery cost.
 
 # Reference Implementation
 
@@ -995,7 +958,11 @@ This CIP is licensed under CC0-1.0: Creative Commons CC0 1.0 Universal.
 
 # Changelog
 
-* Oct 7, 2026: replace CIP number placeholders with the assigned CIP number: CIP-0127
+* Oct 7, 2026:
+
+  * replace CIP number placeholders with the assigned CIP number: CIP-0127
+  * specify lock transfers
+  * make CIP independent of whether TSv2 is the API used for full feature integrations
 
 * Aug 28, 2026: Initial draft created.
 
