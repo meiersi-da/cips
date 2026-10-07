@@ -59,7 +59,7 @@ Governance locks:
 
 Two wallet integration options are supported:
 
-1. **Full feature integration:** all workflows described in this CIP will be exposed via Daml interface APIs for staking apps and wallets to integrate with.
+1. **Full feature integration:** all workflows described in this CIP will be exposed via Daml interface APIs for staking apps and wallets to integrate with. Wallets are expected to build dedicated UIs for these workflows to build a full feature integration.
 2. **Compatibility mode:** a compatibility mode with a reduced feature set allows using any wallet that supports [CIP-56](../cip-0056/cip-0056.md) Token Standard V1 (TSv1) two-step transfers to create locks, unlock them, and withdraw vested funds in daily tranches.
 
 The compatibility mode enables the initial deployment of SV and FA locks without requiring wallets to support the full-feature workflows.
@@ -84,7 +84,12 @@ They may further specify custom metadata, e.g., to tag the locks with an applica
 
 ##### Controllers on Lock Actions
 
-The controllers on lock actions are specified as a set of sets of parties. If all parties in any one of these sets authorize the action, then it happens. All controllers are made observers of the lock contract, so they can monitor its state.
+By default the lock owner controls all actions on the lock.
+
+To change this default, the lock owner can specify custom controllers for each lock action when creating the lock.
+The custom controllers are specified as a set of sets of parties.
+If all parties in any one of these sets authorize the action, then it happens.
+All controllers are made observers of the lock contract, so they can monitor its state.
 
 The controllers can provide their authorization for an action individually one after the other in their own Daml transaction; or jointly in a single transaction. The former is useful when the controllers are each using their own wallet to authorize an action. They do so by executing the action they want to confirm, which only happens once a sufficient set of controllers have authorized it. Joint authorization in a single transaction is useful when their authorization is managed via a third-party app.
 
@@ -188,6 +193,8 @@ A substitution generally results in two locks of the same type with the same loc
 In the spirit of maximizing operational flexibility, a special provision is made for substitutions proposed by the owner of the targeted existing lock. Such a proposal does not lock any funds. Instead the funding of the resulting new locks is provided by splitting the funds of the existing lock. This allows lock owners to update the lock controllers and metadata without requiring any extra liquidity. As for normal substitutions, the substitution controllers on the existing lock must approve the substitution for it to succeed. Note that adding extra funds to an existing lock is not possible using substitutions. For that [topups](#topups-merges-and-minting-locked-sv-rewards) should be used.
 
 Minimum lock amounts are enforced on all locks resulting from partial substitutions. Lock owners are encouraged to lock amounts that are multiples of the minimum lock amount to avoid failed partial substitutions.
+
+Substitution proposals expire after 90 days to prevent indefinite pending substitutions.
 
 ##### Substitution Target Resolution
 
@@ -336,15 +343,17 @@ but are initiated by the owner of the lock whose funds are being transferred and
 
 A transfer proposal is created by the current lock owner.
 It specifies the owner and amount of the new lock to create as a result of the transfer.
-It identifies the target lock by value analogous to substitutions; and the same [limitations regarding target lock resolutions](#substitution-target-resolution) apply.
+It identifies the target lock by value analogous to substitutions, and the same [limitations regarding target lock resolution](#substitution-target-resolution) apply.
 
-To complete the transfer the proposal must be accepted by the new owner and
+To complete the transfer, the proposal must be accepted by the new owner and
 the substitution controllers of the target lock (i.e., the vesting controllers for a vesting lock).
 The new owner may also specify the custom controllers and metadata for the new lock as part of accepting it.
 If they do not, then the new lock will be owner-controlled with empty metadata.
 
 Minimum lock amounts are enforced on all locks resulting from partial transfers.
 Lock owners are encouraged to lock amounts that are multiples of the minimum lock amount to avoid failed partial transfers.
+
+Transfer proposals expire after 90 days to prevent indefinite pending transfers.
 
 ##### Example: Transfer of an FA Lock
 
@@ -356,7 +365,7 @@ Assume the following FA lock exists:
   * amount: 5M CC
   * substitution controllers: `{S, A}`
 
-To transfer 2M CC to `B`, `A` creates the following transfer proposal
+`A` creates the following transfer proposal to transfer 2M CC to `B`:
 
 * Transfer proposal with
   * target
@@ -867,7 +876,10 @@ The subsections within this technical specification provide additional details o
 
 ### App-Specific Metadata
 
-Apps may associate metadata with a lock, such as an application-specific identifier. The Daml interface APIs for governance locks must allow apps to read and set this metadata. Workflows that retain or update a lock must preserve its metadata. Workflows that create new locks must allow specifying the metadata for the newly created lock.
+Apps may associate metadata with a lock, such as an application-specific identifier.
+The Daml interface APIs for governance locks must allow apps to read and set this metadata.
+Governance lock workflows that retain or update a lock must preserve its metadata.
+Governance lock workflows that create new locks must allow specifying the metadata for the newly created lock.
 
 ### Controller Consensus on Withdrawal and Unlock Times
 
@@ -903,7 +915,7 @@ This concern is not specific to this CIP. It already applies to working with the
 
 ### New Network Configuration Parameters
 
-This CIP introduces multiple new network configuration parameters that govern the behavior of governance locks and can be changed using SV voting. All of them are called out explicitly in the high-level specification section which they affect. A full listing of them together with their concrete names can also be found in the reference implementation here (TODO: link to the new config record(s), which include comments).
+This CIP introduces multiple new network configuration parameters that govern the behavior of governance locks and can be changed using SV voting. All of them are called out explicitly in the high-level specification section which they affect. A full listing of them together with their concrete names can also be found in the [reference implementation here](https://github.com/canton-network/splice-sv-fa-locking/blob/30a8b8e539cd69fd91b7a9842bf198657d916396/daml/splice-amulet/daml/Splice/AmuletConfig.daml#L221-L239).
 
 # Motivation
 
@@ -941,16 +953,12 @@ The above priorities also reflect in the following alternatives that we consider
 
 # Reference Implementation
 
-The reference implementation for the Daml code is currently (Aug 28, 2026) being built as a stack of PRs on this Splice feature fork: [https://github.com/canton-network/splice-sv-fa-locking/pulls](https://github.com/canton-network/splice-sv-fa-locking/pulls)
+The reference implementation for the Daml code is currently (Aug 28, 2026) being built as a stack of PRs on this Splice feature fork:
 
-The work is progressing along the Incremental Delivery Plan. See the list below for the links to the PRs and their status:
+* [https://github.com/canton-network/splice-sv-fa-locking/pulls](https://github.com/canton-network/splice-sv-fa-locking/pulls)
 
-1. Creation, unlocking, and vesting for locks w/o custom controllers: [https://github.com/canton-network/splice-sv-fa-locking/pull/1](https://github.com/canton-network/splice-sv-fa-locking/pull/1)
-2. Topups:
-   1. funded with liquid CC [https://github.com/canton-network/splice-sv-fa-locking/pull/9](https://github.com/canton-network/splice-sv-fa-locking/pull/9)
-   2. funded with SV rewards
-   3. funded with existing locks for the same subject
-3. TODO: add the other PRs
+The work is progressing along the Incremental Delivery Plan.
+See the open and closed PRs to track the progress of the reference implementation.
 
 # Copyright
 
@@ -962,6 +970,7 @@ This CIP is licensed under CC0-1.0: Creative Commons CC0 1.0 Universal.
 
   * replace CIP number placeholders with the assigned CIP number: CIP-0127
   * specify lock transfers
+  * specify that substitution and transfer proposals expire after 90 days
   * make CIP independent of whether TSv2 is the API used for full feature integrations
 
 * Aug 28, 2026: Initial draft created.
