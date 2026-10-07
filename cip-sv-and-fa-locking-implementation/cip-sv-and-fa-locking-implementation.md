@@ -1,6 +1,5 @@
 <pre>
-CIP: &lt;xxx&gt; CIP number to be assigned
-     (TODO: add actual CIP number and search and replace through the doc)
+CIP: 0127
 Title: On-Chain Enforcement of FA and SV Locking (Implementation of CIP-0116 and CIP-0105)
 Author: Jonathan D.K. Gibbons @ Obsidian Systems, Simon Meier @ Digital Asset
 Status: Draft
@@ -69,7 +68,7 @@ We expect the wallet ecosystem to migrate over time to full feature integrations
 
 #### Extra Parameters
 
-Extra parameters and data are communicated over the TSv2 APIs via metadata keys prefixed by `cip-<xxx>/` where `<xxx>` represents the CIP number that will be assigned to this implementation CIP. Communicating this data via metadata keys allows reading and setting them via the generic metadata support of wallets. See the section on [Support for Extended Metadata](#support-for-extended-metadata) for details on how wallets are expected to provide this support.
+Extra parameters and data are communicated over the TSv2 APIs via metadata keys prefixed by `cip-127/`. Communicating this data via metadata keys allows reading and setting them via the generic metadata support of wallets. See the section on [Support for Extended Metadata](#support-for-extended-metadata) for details on how wallets are expected to provide this support.
 
 ### Lock Lifecycle
 
@@ -430,13 +429,13 @@ Funds owners whose wallets do not support the TSv2 allocation APIs can use TSv1 
 They do so by initiating a TSv1 transfer to a special party with a memo tag that names the lock subject. Concretely, the parameters for the different types of locks are:
 
 * SV lock:
-  * receiver: `cip-<xxx>_sv-lock::1220000000000000000000000000000000000000000000000000000000000000abcd`
+  * receiver: `cip-127_sv-lock::1220000000000000000000000000000000000000000000000000000000000000abcd`
   * memo tag: `lock-subject=<SV rights owner name>`
 * FA lock:
-  * receiver: `cip-<xxx>_fa-lock::1220000000000000000000000000000000000000000000000000000000000000abcd`
+  * receiver: `cip-127_fa-lock::1220000000000000000000000000000000000000000000000000000000000000abcd`
   * memo tag: `lock-subject=<fa-party-id>`
 * Provisional FA lock:
-  * receiver: `cip-<xxx>_provisional-fa-lock::1220000000000000000000000000000000000000000000000000000000000000abcd`
+  * receiver: `cip-127_provisional-fa-lock::1220000000000000000000000000000000000000000000000000000000000000abcd`
   * memo tag: `lock-subject=<fa-party-id>`
 
 The SV rights owner names correspond to the names that are currently specified in [`approved-sv-id-values.yaml`](https://github.com/canton-foundation/configs/blob/main/configs/MainNet/approved-sv-id-values.yaml). Only minimal fat-finger error protection is provided: they only check that (a) the memo tag field starts with `lock-subject=`, (b) the parsed SV rights owner names consist of alphanumeric characters and hyphens (`-`), and (c) the FA parties are registered parties on the global synchronizer. It is the responsibility of the funds owner to specify the right values.
@@ -793,11 +792,11 @@ The subsections within this technical specification provide additional details o
 
 In the context of this CIP, metadata is used in three distinct ways:
 
-1. **Passing extra choice parameters:** actions on locks like unlocking a partial amount require passing in the amount to the `V2.Allocation_Withdraw` choice ([code](https://github.com/canton-network/splice/blob/ce85b796223b92267877a79a76ab6bb3b5a9949a/token-standard/splice-api-token-allocation-v2/daml/Splice/Api/Token/AllocationV2.daml#L304-L330)). This is done by encoding the amount under the `cip-<xxx>/unlock-amount` key in the `extraArgs.meta` field of the choice.
-2. **Communicating lock-specific data:** wallets retrieve locks using the `V2.AllocationView`. Lock-specific data like the lock subject are encoded in their `meta` fields under keys prefixed with `cip-<xxx>/`, so that wallets can parse and show it to their users.
+1. **Passing extra choice parameters:** actions on locks like unlocking a partial amount require passing in the amount to the `V2.Allocation_Withdraw` choice ([code](https://github.com/canton-network/splice/blob/ce85b796223b92267877a79a76ab6bb3b5a9949a/token-standard/splice-api-token-allocation-v2/daml/Splice/Api/Token/AllocationV2.daml#L304-L330)). This is done by encoding the amount under the `cip-127/unlock-amount` key in the `extraArgs.meta` field of the choice.
+2. **Communicating lock-specific data:** wallets retrieve locks using the `V2.AllocationView`. Lock-specific data like the lock subject are encoded in their `meta` fields under keys prefixed with `cip-127/`, so that wallets can parse and show it to their users.
 3. **Storing app-specific data on locks:** apps may need to store additional data (e.g., an app internal identifier) on a lock in a way that persists across changes to the lock. They can do so by storing that data in the `.meta` field of the `V2.AllocationSpecification` ([code](https://github.com/canton-network/splice/blob/ce85b796223b92267877a79a76ab6bb3b5a9949a/token-standard/splice-api-token-allocation-v2/daml/Splice/Api/Token/AllocationV2.daml#L98-L139)) that they pass when creating a lock. The implementation guarantees to carry along this metadata on governance locks unchanged.
 
-All metadata keys used in this CIP are prefixed with `cip-<xxx>/`. We refrain from listing the keys for all lock data and actions in the CIP text itself. We instead refer to the reference implementation here.
+All metadata keys used in this CIP are prefixed with `cip-127/`. We refrain from listing the keys for all lock data and actions in the CIP text itself. We instead refer to the reference implementation here.
 
 This CIP also depends on the following support for encoding contract-ids as extended metadata.
 
@@ -805,9 +804,9 @@ This CIP also depends on the following support for encoding contract-ids as exte
 
 Normal Token Standard metadata ([code](https://github.com/canton-network/splice/blob/ce85b796223b92267877a79a76ab6bb3b5a9949a/token-standard/splice-api-token-metadata-v1/daml/Splice/Api/Token/MetadataV1.daml#L53-L66)) does not support storing (lists of) contract-ids, as Daml does not support conversions between `Text` and `ContractId` values for technical reasons. Substitutions and top-ups require passing in such values. We propose to do so using the following generic approach that builds on the `ChoiceContext` and `AnyValue` types from the `splice-api-token-metadata-v1` package ([code](https://github.com/canton-network/splice/blob/99e962c4f4162e783d50ca4b9cf4202ddd4befb7/token-standard/splice-api-token-metadata-v1/daml/Splice/Api/Token/MetadataV1.daml#L10-L47)).
 
-Contract-id metadata is passed in via the `context : ChoiceContext` field in the `ExtraArgs` of the token standard choices. They are stored under the key `cip-<xxx>/cid-meta` as an `AV_Map` value containing mappings from metadata keys to `AV_ContractId` or `AV_List` values.
+Contract-id metadata is passed in via the `context : ChoiceContext` field in the `ExtraArgs` of the token standard choices. They are stored under the key `cip-127/cid-meta` as an `AV_Map` value containing mappings from metadata keys to `AV_ContractId` or `AV_List` values.
 
-Whether these values are parsed depends on whether a choice implementation path that requires them is selected by the caller via normal metadata. Callers that do so MUST always overwrite the `cip-<xxx>/cid-meta` key in the choice context returned from the off-ledger API of the token standard registries to avoid that a dishonest off-ledger API overwrites their preferred value.
+Whether these values are parsed depends on whether a choice implementation path that requires them is selected by the caller via normal metadata. Callers that do so MUST always overwrite the `cip-127/cid-meta` key in the choice context returned from the off-ledger API of the token standard registries to avoid that a dishonest off-ledger API overwrites their preferred value.
 
 ### Controller Consensus on Withdrawal and Unlock Times
 
@@ -916,6 +915,8 @@ The work is progressing along the Incremental Delivery Plan. See the list below 
 This CIP is licensed under CC0-1.0: Creative Commons CC0 1.0 Universal.
 
 # Changelog
+
+* Oct 7, 2026: replace CIP number placeholders with the assigned CIP number: CIP-0127
 
 * Aug 28, 2026: Initial draft created.
 
