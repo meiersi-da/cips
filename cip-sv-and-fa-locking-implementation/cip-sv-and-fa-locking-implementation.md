@@ -72,7 +72,7 @@ See [Wallet Integration Details](#wallet-integration-concerns) for details on th
 ### Lock Lifecycle
 
 The following sections describe the lock lifecycle.
-See the final section, titled [Compatibility Mode Lifecycle](#compatibility-mode-lifecycle),
+See the final section, titled [Compatibility Mode](#compatibility-mode),
 for details on how the lock lifecycle works when using the compatibility mode based on TSv1 two-step transfers.
 
 #### Creation
@@ -200,7 +200,8 @@ Substitution proposals expire after 90 days to prevent indefinite pending substi
 
 Substitution proposals specify the target lock by value. Concretely they specify type, owner, subject, controllers, vesting state, and metadata of their target lock. The amount is intentionally not included to avoid substitutions that cannot be accepted because the amount changed due to concurrent partial unlocks, partial substitutions, topups, or merges.
 
-The implementation may resolve this target to any lock that matches its specification. No check on the amount is done as part of substitution target resolution, which may lead to failed substitutions if there are substitutions that match the specification but have an amount that is lower than the substitution amount. In these cases we recommend that the lock owners first [merge the locks](#topups-merges-and-minting-locked-sv-rewards) matching the same specification and only then apply the substitution.
+The implementation uses contract keys to resolve this target to all locks that match the specification.
+If there are multiple locks, then it merges them first before applying the substitution to avoid failed substitutions due to insufficient amounts in individual locks.
 
 ##### Example: Substitution of Locked Funds
 
@@ -343,7 +344,7 @@ but are initiated by the owner of the lock whose funds are being transferred and
 
 A transfer proposal is created by the current lock owner.
 It specifies the owner and amount of the new lock to create as a result of the transfer.
-It identifies the target lock by value analogous to substitutions, and the same [limitations regarding target lock resolution](#substitution-target-resolution) apply.
+It identifies and resolves the target lock by value [analogous to substitutions](#substitution-target-resolution).
 
 To complete the transfer, the proposal must be accepted by the new owner and
 the substitution controllers of the target lock (i.e., the vesting controllers for a vesting lock).
@@ -508,48 +509,295 @@ The minimum amount restriction is enforced on all actions that create additional
 
 Note that new SVs will need to lock the minimum lock amount once they are onboarded to avoid [losing their SV weight as shown in this example](#example-temporary-loss-of-reward-weight).
 
-#### Compatibility Mode Lifecycle
+#### Compatibility Mode
 
-Funds owners whose wallets do not provide a full-feature integration can use TSv1 two-step transfers to create a lock without app-specific metadata and whose unlocking, substitution, and withdrawal is controlled by the funds owner itself.
+Funds owners whose wallets do not provide a full-feature integration can use TSv1 two-step transfers to manage locks that are [owner-controlled](#controllers-on-lock-actions)
+and have no [app-specific metadata](#app-specific-metadata).
 
-They do so by initiating a TSv1 transfer to a special party with a memo tag that names the lock subject. Concretely, the parameters for the different types of locks are:
+##### Lock Display in Wallets
 
-* SV lock:
-  * receiver: `cip-127_sv-lock::1220000000000000000000000000000000000000000000000000000000000000abcd`
-  * memo tag: `lock-subject=<SV rights owner name>`
-* FA lock:
-  * receiver: `cip-127_fa-lock::1220000000000000000000000000000000000000000000000000000000000000abcd`
-  * memo tag: `lock-subject=<fa-party-id>`
-* Provisional FA lock:
-  * receiver: `cip-127_provisional-fa-lock::1220000000000000000000000000000000000000000000000000000000000000abcd`
-  * memo tag: `lock-subject=<fa-party-id>`
+Locks are displayed in wallets as pending TSv1 transfers with
+
+* sender: `<funds-owner-party-id>`
+* receiver: `cip-127_lock-manager::1220000000000000000000000000000000000000000000000000000000000000abcd`
+* memo tag: `cip-127/memo:<lock-parameters>`
+
+where the lock parameters shown as `key=value` pairs separated by `&`. Governance locks will have the following key-value pairs:
+
+* `lock-kind=<sv-lock|fa-lock|provisional-fa-lock>`
+* `lock-subject=<sv-name|fa-party-id>`
+* `lock-status=locked`
+
+Vesting locks will have the following key-value pairs:
+
+* `lock-kind=<sv-lock|fa-lock|provisional-fa-lock>`
+* `lock-subject=<sv-name|fa-party-id>`
+* `lock-status=vesting`
+* `lock-vesting-duration-micros=<vesting duration in microseconds>`
+* `lock-vesting-end-time-micros=<vesting end time in microseconds since unix epoch>`
+* `lock-vesting-info="vesting for <decimal> days until <date>"`
+
+For example, assume there is a vesting FA lock created at the start of the Unix epoch 1970-01-01T00:00:00Z:
+
+* Vesting FA lock with
+  * lock owner: `A`
+  * lock subject: `X`
+  * amount vesting: 1M CC
+  * vesting duration: `60 days` = `5,184,000` seconds
+  * vesting end: `0 + 60 days` = `60 × 24 × 60 × 60` = `5,184,000` seconds after Unix epoch
+
+This lock would be displayed in the wallet as a pending TSv1 transfer with:
+
+* sender: `A`
+* receiver: `cip-127_lock-manager::1220000000000000000000000000000000000000000000000000000000000000abcd`
+* amount: 1M CC
+* memo: `cip-127/memo:lock-kind=fa-lock&lock-subject=X&lock-status=vesting&lock-vesting-duration-micros=5184000000000&lock-vesting-end-time-micros=5184000000000&lock-vesting-info="vesting for 60.0 days until 1970-03-02T00:00:00Z"`
+
+The reason for representing the vesting durations and end times in microseconds is to enable precise
+round-tripping of that information when specifying the target of substitutions and transfers.
+The `lock-vesting-info` field provides a human-readable summary of the vesting schedule.
+
+##### Lock Actions
+
+Actions on locks are performed by initiating a TSv1 transfer to the special `cip-127_lock-manager::1220000000000000000000000000000000000000000000000000000000000000abcd` party with a memo tag that specifies the request and its parameters.
+The supported actions are: creating locks, starting vesting, withdrawing vested funds, substituting locks, and transferring locks.
+We explain them in the following sections.
+
+###### Creating Locks
+
+* sender: `<funds-owner-party-id>`
+* receiver: `cip-127_lock-manager::1220000000000000000000000000000000000000000000000000000000000000abcd`
+* amount: `<amount-to-lock>`
+* memo tag: `cip-127/memo:`
+  * `request=create-lock&`
+  * `lock-kind=<sv-lock|fa-lock|provisional-fa-lock>&`
+  * `lock-subject=<sv-name|fa-party-id>`
 
 The SV rights owner names correspond to the names that are currently specified in [`approved-sv-id-values.yaml`](https://github.com/canton-foundation/configs/blob/main/configs/MainNet/approved-sv-id-values.yaml). Only minimal fat-finger error protection is provided: they only check that (a) the memo tag field starts with `lock-subject=`, (b) the parsed SV rights owner names consist of alphanumeric characters and hyphens (`-`), and (c) the FA parties are registered parties on the global synchronizer. It is the responsibility of the funds owner to specify the right values.
 
-The funds owner can always request unlocking the funds by withdrawing the transfer offer. It immediately starts vesting. The transfer offer itself continues to be shown in the wallet, but with a changed state that reports that the funds are vesting.
+*Example:* Party `A` can create a 5M CC FA lock for app provider party `X` by initiating the following transfer:
 
-The funds owner can withdraw the vested funds by calling withdraw on the transfer offer again. If all funds have vested, the transfer offer is archived. Otherwise it remains in the wallet, but with a transfer offer amount reduced by the amount of funds that have vested and were paid out.
+* sender: `A`
+* receiver: `cip-127_lock-manager::1220000000000000000000000000000000000000000000000000000000000000abcd`
+* amount: 5M CC
+* memo tag: `cip-127/memo:request=create-lock&lock-kind=fa-lock&lock-subject=X`
 
-The status of a lock is reported as a prefix in the memo tag of the transfer offer.
-The prefix is `lock-status=<status>&` where `<status>` can be one of the following:
+###### Unlocking Locks
 
-* `locked`: the funds are currently locked and are counted towards the lock threshold
-* `vesting-until-<end-time>`: the funds are vesting until the specified end time
+* sender: `<funds-owner-party-id>`
+* receiver: `cip-127_lock-manager::1220000000000000000000000000000000000000000000000000000000000000abcd`
+* amount: `<ignored>`
+* memo tag: `cip-127/memo:`
+  * `request=unlock-and-start-vesting&`
+  * `unlock-amount=<amount-to-unlock>&`
+  * `vesting-start-time=<vesting start time in ISO 8601 format>&`
+  * `lock-kind=<sv-lock|fa-lock|provisional-fa-lock>&`
+  * `lock-subject=<sv-name|fa-party-id>`
 
-For example, the memo tag `lock-status=locked&lock-subject=ExampleSV` indicates that the funds are
-currently locked for `ExampleSV` and count towards their lock threshold.
+Note that the  `amount` field in the transfer instruction is not used as the
+specification of the amount to unlock, as that would require wallets to provide
+input holdings over the whole amount to unlock.
+Ideally, wallets allow specifying `0.0` as the input amount and
+do not fetch any input holdings in that case.
+Specifying any other amount is also possible, but it will be ignored by the lock manager.
 
+The transfer must be submitted to the network before the vesting start time,
+as otherwise the vesting schedule could be circumvented by backdating the vesting start time.
+The transfer is rejected if the vesting start is more than 24h in the future to avoid fat finger mistakes.
+
+*Example:* Assume party `A` has the following FA lock:
+
+* FA lock with
+  * lock owner: `A`
+  * lock subject: `X`
+  * amount: 5M CC
+
+`A` can unlock 1M CC from this lock, starting vesting at
+`2030-01-01T00:00:00Z`, by initiating the following transfer:
+
+* sender: `A`
+* receiver: `cip-127_lock-manager::1220000000000000000000000000000000000000000000000000000000000000abcd`
+* amount: 0.0 CC
+* memo tag: `cip-127/memo:request=unlock-and-start-vesting&unlock-amount=1000000&vesting-start-time=2030-01-01T00:00:00Z&lock-kind=fa-lock&lock-subject=X`
+
+The transfer amount is ignored; `unlock-amount` specifies how much to unlock. The vesting start
+time is `2030-01-01T00:00:00Z` expressed in ISO 8601 format using the UTC timezone.
+Assuming the FA vesting duration is 60 days, the result is a 1M CC vesting lock displayed in the
+wallet as the following pending transfer instruction:
+
+* sender: `A`
+* receiver: `cip-127_lock-manager::1220000000000000000000000000000000000000000000000000000000000000abcd`
+* amount: 1M CC
+* memo tag: `cip-127/memo:lock-kind=fa-lock&lock-subject=X&lock-status=vesting&lock-vesting-duration-micros=5184000000000&lock-vesting-end-time-micros=1898640000000000&lock-vesting-info="vesting for 60.0 days until 2030-03-02T00:00:00Z"`
+
+###### Withdrawing from Vesting Locks
+
+* sender: `<funds-owner-party-id>`
+* receiver: `cip-127_lock-manager::1220000000000000000000000000000000000000000000000000000000000000abcd`
+* amount: `<ignored>`
+* memo tag: `cip-127/memo:`
+  * `request=withdraw-vested-funds&`
+  * `vested-until-time=<withdrawal time in ISO 8601 format>&`
+  * `lock-kind=<sv-lock|fa-lock|provisional-fa-lock>&`
+  * `lock-subject=<sv-name|fa-party-id>&`
+  * `lock-status=vesting&`
+  * `lock-vesting-duration-micros=<vesting duration in microseconds>&`
+  * `lock-vesting-end-time-micros=<vesting end time in microseconds since unix epoch>`
+
+As with unlocking, the transfer amount is ignored; wallets should use `0.0` when possible.
+The `vested-until-time` specifies the point as of which vested funds should be computed and withdrawn.
+It must be in the past.
+The remaining fields identify the vesting lock from which the funds are being withdrawn.
+They can be copied from the original lock's memo as displayed in the wallet.
+
+*Example:* Continuing from the unlock example above, after `2030-01-16T00:00:00Z` party `A` can
+withdraw the 250,000 CC vested in the first 15 days by submitting:
+
+* sender: `A`
+* receiver: `cip-127_lock-manager::1220000000000000000000000000000000000000000000000000000000000000abcd`
+* amount: 0.0 CC
+* memo tag: `cip-127/memo:request=withdraw-vested-funds&vested-until-time=2030-01-16T00:00:00Z&lock-kind=fa-lock&lock-subject=X&lock-status=vesting&lock-vesting-duration-micros=5184000000000&lock-vesting-end-time-micros=1898640000000000`
+
+The result is a payout of 250,000 CC to `A` and the following updated vesting lock, displayed in the wallet as a pending transfer instruction:
+
+* sender: `A`
+* receiver: `cip-127_lock-manager::1220000000000000000000000000000000000000000000000000000000000000abcd`
+* amount: 750,000 CC
+* memo tag: `cip-127/memo:lock-kind=fa-lock&lock-subject=X&lock-status=vesting&lock-vesting-duration-micros=3888000000000&lock-vesting-end-time-micros=1898640000000000&lock-vesting-info="vesting for 45.0 days until 2030-03-02T00:00:00Z"`
+
+###### Substituting Locks
+
+Substitutions are initiated by the owner of the substituted funds using a transfer of the following form:
+
+* sender: `<new-lock-owner-party-id>`
+* receiver: `cip-127_lock-manager::1220000000000000000000000000000000000000000000000000000000000000abcd`
+* amount: `<amount-to-substitute>`
+* memo tag: `cip-127/memo:`
+  * `request=substitute-lock&`
+  * `target-lock-owner=<target-lock-owner-party-id>&`
+  * `lock-kind=<sv-lock|fa-lock|provisional-fa-lock>&`
+  * `lock-subject=<sv-name|fa-party-id>&`
+  * `lock-status=<locked|vesting>`
+  * for vesting locks, also include
+    * `lock-vesting-duration-micros=<vesting duration in microseconds>&`
+    * `lock-vesting-end-time-micros=<vesting end time in microseconds since unix epoch>`
+
+The result is a pending transfer instruction visible to both `<new-lock-owner-party-id>` and `<target-lock-owner-party-id>` with the following details:
+
+* sender: `<new-lock-owner-party-id>`
+* receiver: `<target-lock-owner-party-id>`
+* amount: `<amount-to-substitute>`
+* memo tag: `cip-127/memo:`
+  * `request=accept-to-substitute-lock&`
+  * `lock-kind=<sv-lock|fa-lock|provisional-fa-lock>&`
+  * `lock-subject=<sv-name|fa-party-id>&`
+  * `lock-status=<locked|vesting>`
+  * for vesting locks, also include
+    * `lock-vesting-duration-micros=<vesting duration in microseconds>&`
+    * `lock-vesting-end-time-micros=<vesting end time in microseconds since unix epoch>`
+
+The target lock owner can accept or reject the substitution by accepting or rejecting the pending transfer instruction using their wallet.
+The new lock owner can withdraw the substitution by withdrawing the pending transfer instruction using their wallet.
+
+*Example:* Assume party `A` owns the following FA lock:
+
+* FA lock with
+  * lock owner: `A`
+  * lock subject: `X`
+  * amount: 5M CC
+
+Party `B` can propose substituting 1M CC of this lock by initiating the transfer:
+
+* sender: `B`
+* receiver: `cip-127_lock-manager::1220000000000000000000000000000000000000000000000000000000000000abcd`
+* amount: 1M CC
+* memo tag: `cip-127/memo:request=substitute-lock&target-lock-owner=A&lock-kind=fa-lock&lock-subject=X&lock-status=locked`
+
+This creates a pending transfer instruction for `A` to accept:
+
+* sender: `B`
+* receiver: `A`
+* amount: 1M CC
+* memo tag: `cip-127/memo:request=accept-to-substitute-lock&lock-kind=fa-lock&lock-subject=X&lock-status=locked`
+
+If `A` accepts this transfer instruction, then 1M CC is paid out to `A`, the existing FA lock is reduced to 4M CC, and a new owner-controlled FA lock for `B` is created with subject `X` and amount 1M CC.
+`B`'s wallet will display the new lock as this pending transfer instruction:
+
+* sender: `B`
+* receiver: `cip-127_lock-manager::1220000000000000000000000000000000000000000000000000000000000000abcd`
+* amount: 1M CC
+* memo tag: `cip-127/memo:lock-kind=fa-lock&lock-subject=X&lock-status=locked`
+
+###### Transferring Locks
+
+Transfers are initiated by the current owner of the target lock using a transfer of the following form:
+
+* sender: `<current-lock-owner-party-id>`
+* receiver: `cip-127_lock-manager::1220000000000000000000000000000000000000000000000000000000000000abcd`
+* amount: `<ignored>`
+* memo tag: `cip-127/memo:`
+  * `request=transfer-lock&`
+  * `new-lock-owner=<new-lock-owner-party-id>&`
+  * `transfer-amount=<amount-to-transfer>&`
+  * `lock-kind=<sv-lock|fa-lock|provisional-fa-lock>&`
+  * `lock-subject=<sv-name|fa-party-id>&`
+  * `lock-status=<locked|vesting>`
+  * for vesting locks, also include
+    * `lock-vesting-duration-micros=<vesting duration in microseconds>&`
+    * `lock-vesting-end-time-micros=<vesting end time in microseconds since unix epoch>`
+
+The result is a pending transfer instruction visible to both `<current-lock-owner-party-id>` and `<new-lock-owner-party-id>` with the following details:
+
+* sender: `<current-lock-owner-party-id>`
+* receiver: `<new-lock-owner-party-id>`
+* amount: `<amount-to-transfer>`
+* memo tag: `cip-127/memo:`
+  * `request=accept-to-transfer-lock&`
+  * `lock-kind=<sv-lock|fa-lock|provisional-fa-lock>&`
+  * `lock-subject=<sv-name|fa-party-id>&`
+  * `lock-status=<locked|vesting>`
+  * for vesting locks, also include
+    * `lock-vesting-duration-micros=<vesting duration in microseconds>&`
+    * `lock-vesting-end-time-micros=<vesting end time in microseconds since unix epoch>`
+
+The new lock owner can accept or reject the proposal by accepting or rejecting the pending transfer instruction using their wallet. The current lock owner can withdraw the proposal by withdrawing the pending transfer instruction.
+
+*Example:* Assume party `A` owns the following FA lock:
+
+* FA lock with
+  * lock owner: `A`
+  * lock subject: `X`
+  * amount: 5M CC
+
+Party `A` can propose transferring 2M CC of this lock to party `B` by initiating:
+
+* sender: `A`
+* receiver: `cip-127_lock-manager::1220000000000000000000000000000000000000000000000000000000000000abcd`
+* amount: 0.0 CC
+* memo tag: `cip-127/memo:request=transfer-lock&new-lock-owner=B&transfer-amount=2000000&lock-kind=fa-lock&lock-subject=X&lock-status=locked`
+
+This creates a pending transfer instruction for `B` to accept:
+
+* sender: `A`
+* receiver: `B`
+* amount: 2M CC
+* memo tag: `cip-127/memo:request=accept-to-transfer-lock&lock-kind=fa-lock&lock-subject=X&lock-status=locked`
+
+If `B` accepts this transfer instruction, the existing FA lock remains with `A` and is reduced to 3M CC, and a new owner-controlled FA lock for `B` is created with subject `X` and amount 2M CC. `B`'s wallet will display the new lock as this pending transfer instruction:
+
+* sender: `B`
+* receiver: `cip-127_lock-manager::1220000000000000000000000000000000000000000000000000000000000000abcd`
+* amount: 2M CC
+* memo tag: `cip-127/memo:lock-kind=fa-lock&lock-subject=X&lock-status=locked`
 
 ##### Limitations
 
 The limitations of the compatibility mode are the following:
 
-1. no support for custom unlock, substitution, and vesting controllers
-2. no support for substitution or transfers
+1. no support for managing locks with custom controllers
+2. no support for managing locks with app-specific metadata
 3. no support for topups, merges, and locked SV reward minting
 4. the locks show as long-lived transfer offers in the wallet UI
-5. extra metadata must be provided to guarantee a 24h prepare-submission delay
-  (see [Compatibility Mode Details](#compatibility-mode-details))
 
 ### Automatic Enforcement of FA Underlocking
 
@@ -965,6 +1213,10 @@ See the open and closed PRs to track the progress of the reference implementatio
 This CIP is licensed under CC0-1.0: Creative Commons CC0 1.0 Universal.
 
 # Changelog
+
+* Oct 8, 2026:
+  * refactored compatibility mode to support transfers and substitutions of owner-controlled locks without metadata
+  * added auto-merging of locks before applying substitutions and transfers
 
 * Oct 7, 2026:
 
