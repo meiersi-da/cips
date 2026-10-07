@@ -100,7 +100,8 @@ The lock owner `A` is the party that owns the 5M CC that are locked for the feat
 
 The substitution controllers and the unlock controllers are the same. They are chosen such that any two out of the three parties `{A, X, S}` can take the action on their own. This reflects that the staking app acts as a trusted third-party between `X` and `A`, but `A` and `X` also reserve the right to act independently of `S`.
 
-The vesting controllers control the disbursal of vesting funds, which can happen via withdrawals or substitutions. In this example, they are chosen such that `S` can automate the withdrawal or substitution of vested funds on behalf of `A` without an extra delegation contract, but `A` can also drive substitutions and withdrawals themselves.
+The vesting controllers control the disbursal of vesting funds, which can happen via withdrawals, substitutions, or transfers.
+In this example, they are chosen such that `S` can automate the withdrawal or substitution of vested funds on behalf of `A` without an extra delegation contract, but `A` can also drive substitutions and withdrawals themselves.
 
 #### Unlocking
 
@@ -181,7 +182,7 @@ A substitution generally results in two locks of the same type with the same loc
 
 In the spirit of maximizing operational flexibility, a special provision is made for substitutions proposed by the owner of the targeted existing lock. Such a proposal does not lock any funds. Instead the funding of the resulting new locks is provided by splitting the funds of the existing lock. This allows lock owners to update the lock controllers and metadata without requiring any extra liquidity. As for normal substitutions, the substitution controllers on the existing lock must approve the substitution for it to succeed. Note that adding extra funds to an existing lock is not possible using substitutions. For that [topups](#topups-merges-and-minting-locked-sv-rewards) should be used.
 
-Minimum lock amounts are enforced on all locks resulting from substitutions. Lock owners are encouraged to lock amounts that are multiples of the minimum lock amount to avoid failed substitutions.
+Minimum lock amounts are enforced on all locks resulting from partial substitutions. Lock owners are encouraged to lock amounts that are multiples of the minimum lock amount to avoid failed partial substitutions.
 
 ##### Substitution Target Resolution
 
@@ -318,6 +319,77 @@ Assume further that `S` and `A` jointly accept the proposal, which results in:
   * vesting controllers: `{S, B}`
 
 Note that not only the amount changed, but also the vesting controllers as specified in the substitution proposal.
+
+#### Transfers
+
+Lock transfers allow changing the ownership of a lock's funds without changing the lock type, subject and vesting state.
+This is useful for example to change the funds custodian without going through vesting or prefunding a [substitution](#substitution).
+
+Transfers can be seen as special form of substitutions.
+They work similarly to substitutions,
+but are initiated by the owner of the lock whose funds are being transferred and require no prefunding.
+
+A transfer proposal is created by the current lock owner.
+It specifies the owner and amount of the new lock to create as a result of the transfer.
+It identifies the target lock by value analogous to substitutions; and the same [limitations regarding target lock resolutions](#substitution-target-resolution) apply.
+
+To complete the transfer the proposal must be accepted by the new owner and
+the substitution controllers of the target lock (i.e., the vesting controllers for a vesting lock).
+The new owner may also specify the custom controllers and metadata for the new lock as part of accepting it.
+If they do not, then the new lock will be owner-controlled with empty metadata.
+
+Minimum lock amounts are enforced on all locks resulting from partial transfers.
+Lock owners are encouraged to lock amounts that are multiples of the minimum lock amount to avoid failed partial transfers.
+
+##### Example: Transfer of an FA Lock
+
+Assume the following FA lock exists:
+
+* FA lock with
+  * lock owner: `A`
+  * lock subject: `X`
+  * amount: 5M CC
+  * substitution controllers: `{S, A}`
+
+To transfer 2M CC to `B`, `A` creates the following transfer proposal
+
+* Transfer proposal with
+  * target
+    * FA Lock with
+      * lock owner: `A`
+      * lock subject: `X`
+      * substitution controllers: `{S, A}`
+  * new lock
+    * lock owner: `B`
+    * amount: 2M CC
+
+The proposal does not reserve funds.
+Assume that `B` accepts the transfer proposal and specifies substitution controllers `{S, B}` for the new lock, which results in:
+
+* Transfer proposal with
+  * target
+    * FA Lock with
+      * lock owner: `A`
+      * lock subject: `X`
+      * substitution controllers: `{S, A}`
+  * new lock
+    * lock owner: `B`
+    * amount: 2M CC
+    * substitution controllers: `{S, B}`
+  * approved by: `{B}`
+
+Once the transfer is also approved by substitution controllers of the existing lock `S` and `A`, the transfer completes and results in:
+
+* FA lock with
+  * lock owner: `A`
+  * lock subject: `X`
+  * amount: 3M CC
+  * substitution controllers: `{S, A}`
+* FA lock with
+  * lock owner: `B`
+  * lock subject: `X`
+  * amount: 2M CC
+  * substitution controllers: `{S, B}`
 
 #### Topups, Merges, and Minting Locked SV Rewards
 
@@ -459,7 +531,7 @@ currently locked for `ExampleSV` and count towards their lock threshold.
 The limitations of the compatibility mode are the following:
 
 1. no support for custom unlock, substitution, and vesting controllers
-2. no support for substitution
+2. no support for substitution or transfers
 3. no support for topups, merges, and locked SV reward minting
 4. the locks show as long-lived transfer offers in the wallet UI
 5. extra metadata must be provided to guarantee a 24h prepare-submission delay
@@ -755,7 +827,7 @@ We propose an incremental delivery that focuses first on on-chain enforcement of
 1. **Compatibility mode for SV locks:** implement the compatibility mode based on the TSv1 APIs for creating SV locks. Locks must always lock an SV determined minimal amount of CC.
 2. **Compatibility mode for FA locks:** implement the compatibility mode based on the TSv1 APIs for creating (provisional) FA locks; and add SV automation to convert provisional into full FA locks once the corresponding featured app right is created.
 3. **Basic SV and FA locks and non-default controllers:** add support to use the TSv2 APIs to interact with SV and (provisional) FA locks and to create SV and (provisional) FA locks with custom controllers for unlocking, substitution and withdrawal.
-4. **Substitution for SV and FA locks:** add support to use the TSv2 APIs to propose substitutions of (vesting) SV and FA locks as described in the section on [Substitution](#substitution).
+4. **Substitution and transfers for SV and FA locks:** add support to use the TSv2 APIs to propose substitutions and transfers of (vesting) SV and FA locks as described in the section on [Substitution](#substitution) and [Transfers](#transfers).
 5. **Topups and Merges for SV and FA locks:** add support to use the TSv2 APIs to execute topups and merges including the ability to mint SV rewards directly in locked form into an existing SV lock.
 6. **Automatic enforcement of FA underlocking:** FA underlocks are tracked and automatically enforced after a seven day grace period.
 7. **SV lock top-up automation:** extend the minting automation of validator nodes to mint a target percentage of SV rewards in locked form.
@@ -773,7 +845,7 @@ Analogous to the incremental delivery, we propose to incrementally move the enfo
    2. Once that is activated at time `t`, they use their dashboards to determine the lifetime SV rewards up to time `t` and reflect that on-chain by creating corresponding SV votes.
    3. Once all lifetime rewards have been reflected on-ledger, the foundation can stop monitoring and enforcing SV underlocks via manual SV votes.
 
-Note that in Step 1, the SVs can create and manage their locks using any TSv1 wallet with support for two-step transfers. They will be able to use substitutions, as soon as the “Substitution for SV and FA locks” feature lands on MainNet and their wallets support substitution either directly or via TSv2 support with generic extended metadata.
+Note that in Step 1, the SVs can create and manage their locks using any TSv1 wallet with support for two-step transfers. They will be able to use substitutions and transfers, as soon as the “Substitution and Transfers for SV and FA locks” feature lands on MainNet and their wallets support substitution and transfers either directly or via TSv2 support with generic extended metadata.
 
 ### Migration to On-Chain Enforcement of FA Locks
 
@@ -782,7 +854,7 @@ Analogous to the incremental delivery, we propose to incrementally move the enfo
 1. **Require on-chain FA locks:** the foundation switches their dashboards to also incorporate on-chain FA locks in the total locked amounts. Once the feature set of FA locks on MainNet is sufficient for staking apps to transition their funds, the FA operators and staking apps are given 30 days to transition their FA locks to on-chain locks.
 2. **Relieve foundation of FA lock enforcement:** once “Automatic enforcement of FA underlocking” goes live on MainNet the foundation can stop monitoring and enforcing FA underlocks via manual SV votes.
 
-We propose that the feature set considered for Increment 1 consists of the FA lock compatibility mode, basic FA locks with custom controllers, and substitutions. We propose that topups and merges of FA locks are not a strict requirement, but should be delivered soon thereafter.
+We propose that the feature set considered for Increment 1 consists of the FA lock compatibility mode, basic FA locks with custom controllers,  substitutions, and transfers. We propose that topups and merges of FA locks are not a strict requirement, but should be delivered soon thereafter.
 
 ## Technical Specification
 
@@ -891,8 +963,15 @@ The above priorities also reflect in the following alternatives that we consider
 
 * **Use TSv2 exclusively:** building only one interface between wallets and governance locks would lower the implementation cost, but it would also delay the transition to on-chain SV locks until all of their custodians have implemented support for TSv2. Adding the compatibility mode accelerates the transition at low cost.
 * **Allow substitutions to change the lock subject:** technically the substitution operation could also allow changing the lock subject, which would provide interesting flexibility to funds providers. However it likely would reduce the total value locked on-chain. For example, FA providers would have way less “skin in the game”, as they could just walk away from their current FA right, and transition their locked funds to a new FA party with a new right.
-* **No grace period for permanent removal of underlocked FA rights:** CIP-0116 stipulates that “If locking falls below required thresholds, Featured App status is immediately removed.” Enforcing this strictly would imply that a single operational mistake on a single FA lock would make an FA provider lose their FA status and force them to go through the manual process of reapplying for it. We consider this unnecessary operational overhead, which is why this CIP proposes to immediately suspend the FA status on underlocking, but only permanently revoke it after a grace period.
+* **Make transfers a special case of substitutions:**
+  in principle, substitutions could specify both a `substitutedAmount` that determines the funds provided by the new owner and a `transferAmount` that determines the funds being transferred from the current owner to the new owner. This would technically allow transfers to be modeled as substitutions.
+  However it makes accepting a substitution risky, as the new owner could
+  attempt to pretend that they are substituting funds when in fact they are also
+  claiming funds from the existing owner.
+  Requiring the existing owner to initiate the transfer of their funds
+  removes that risk.
 * **Make topups a special case of substitutions:** from a technical perspective this would be well possible, as the arguments align well. We rejected this as these two operations are quite different in their intent, and combining them risks confusing users.
+* **No grace period for permanent removal of underlocked FA rights:** CIP-0116 stipulates that “If locking falls below required thresholds, Featured App status is immediately removed.” Enforcing this strictly would imply that a single operational mistake on a single FA lock would make an FA provider lose their FA status and force them to go through the manual process of reapplying for it. We consider this unnecessary operational overhead, which is why this CIP proposes to immediately suspend the FA status on underlocking, but only permanently revoke it after a grace period.
 * **Switch SV reward minting flows to TBAR:** there were initial considerations of switching SV rewards minting to use the same off-ledger computations as the ones used for traffic-based app rewards. This would allow for slightly less delayed underlock enforcement, as it could be computed exactly as of round start instead of being delayed by about 30s. However the implementation effort for doing this switch is significantly higher than the one for adapting the existing SV reward minting flow.
 * **No minimum lock amount:** the minimum lock amount requirement does complicate the operations of staking apps and it would be great to not have it. However without a minimum lock amount there’s a risk that staking apps do produce lots of small locks. A situation that’s similar to how some wallets used to produce lots of “dust” CC holdings, e.g., as part of marketing campaigns. Every lock does consume resources on SV nodes. A minimum lock amount avoids having to spend delivery resources on scalability problems resulting from “dust locks”.
 * **Define a governance-lock specific Daml interface:** the metadata-based interface for interacting with governance locks requires staking apps to build extra decoding and encoding logic. Defining a governance-lock specific Daml interface would obviate the need for this logic. We do not do so, as we believe sharing the interface definitions with wallets and making use of the extension points in the token standard has lower overall delivery cost.
