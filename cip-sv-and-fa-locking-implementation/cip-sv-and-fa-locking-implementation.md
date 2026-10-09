@@ -80,7 +80,6 @@ for details on how the lock lifecycle works when using the compatibility mode ba
 All locks are created by the lock owner.
 They must specify the lock type (FA or SV), the lock subject, and the lock amount.
 They may also specify custom controllers for the unlock, withdraw and substitution actions explained below.
-They may further specify custom metadata, e.g., to tag the locks with an application-specific identifier.
 
 ##### Controllers on Lock Actions
 
@@ -186,11 +185,11 @@ Note that the amount vesting and the vesting start are changed to represent the 
 
 #### Substitution
 
-Funds owners can create a proposal to use their funds to substitute some (or all) of the locked amount of an existing lock. Substitution works for all types of locks independently of whether they are vesting or not. Substitutions of vesting locks are approved by the vesting controllers, while substitutions of non-vesting locks are approved by the substitution controllers. The new lock to be created is specified as part of the substitution. While it must have the same type as the existing lock, it can have different controllers and [app-specific metadata](#app-specific-metadata).
+Funds owners can create a proposal to use their funds to substitute some (or all) of the locked amount of an existing lock. Substitution works for all types of locks independently of whether they are vesting or not. Substitutions of vesting locks are approved by the vesting controllers, while substitutions of non-vesting locks are approved by the substitution controllers. The new lock to be created is specified as part of the substitution. While it must have the same type as the existing lock, it can have different controllers.
 
 A substitution generally results in two locks of the same type with the same lock subject whose total amount is equal to the amount of the existing lock. The substituted funds in the existing lock are released as liquid CC to the lock owner of the existing lock. Locks whose locked amount would be zero are not created.
 
-In the spirit of maximizing operational flexibility, a special provision is made for substitutions proposed by the owner of the targeted existing lock. Such a proposal does not lock any funds. Instead the funding of the resulting new locks is provided by splitting the funds of the existing lock. This allows lock owners to update the lock controllers and metadata without requiring any extra liquidity. As for normal substitutions, the substitution controllers on the existing lock must approve the substitution for it to succeed. Note that adding extra funds to an existing lock is not possible using substitutions. For that [topups](#topups-merges-and-minting-locked-sv-rewards) should be used.
+In the spirit of maximizing operational flexibility, a special provision is made for substitutions proposed by the owner of the targeted existing lock. Such a proposal does not lock any funds. Instead the funding of the resulting new locks is provided by splitting the funds of the existing lock. This allows lock owners to update the lock controllers without requiring any extra liquidity. As for normal substitutions, the substitution controllers on the existing lock must approve the substitution for it to succeed. Note that adding extra funds to an existing lock is not possible using substitutions. For that [topups](#topups-merges-and-minting-locked-sv-rewards) should be used.
 
 Minimum lock amounts are enforced on all locks resulting from partial substitutions. Lock owners are encouraged to lock amounts that are multiples of the minimum lock amount to avoid failed partial substitutions.
 
@@ -198,7 +197,7 @@ Substitution proposals expire after 90 days to prevent indefinite pending substi
 
 ##### Substitution Target Resolution
 
-Substitution proposals specify the target lock by value. Concretely they specify type, owner, subject, controllers, vesting state, and metadata of their target lock. The amount is intentionally not included to avoid substitutions that cannot be accepted because the amount changed due to concurrent partial unlocks, partial substitutions, topups, or merges.
+Substitution proposals specify the target lock by value. Concretely they specify type, owner, subject, controllers, and vesting state of their target lock. The amount is intentionally not included to avoid substitutions that cannot be accepted because the amount changed due to concurrent partial unlocks, partial substitutions, topups, or merges.
 
 The implementation uses contract keys to resolve this target to all locks that match the specification.
 If there are multiple locks, then it merges them first before applying the substitution to avoid failed substitutions due to insufficient amounts in individual locks.
@@ -348,8 +347,8 @@ It identifies and resolves the target lock by value [analogous to substitutions]
 
 To complete the transfer, the proposal must be accepted by the new owner and
 the substitution controllers of the target lock (i.e., the vesting controllers for a vesting lock).
-The new owner may also specify the custom controllers and metadata for the new lock as part of accepting it.
-If they do not, then the new lock will be owner-controlled with empty metadata.
+The new owner may also specify the custom controllers for the new lock as part of accepting it.
+If they do not, then the new lock will be owner-controlled.
 
 Minimum lock amounts are enforced on all locks resulting from partial transfers.
 Lock owners are encouraged to lock amounts that are multiples of the minimum lock amount to avoid failed partial transfers.
@@ -511,8 +510,7 @@ Note that new SVs will need to lock the minimum lock amount once they are onboar
 
 #### Compatibility Mode
 
-Funds owners whose wallets do not provide a full-feature integration can use TSv1 two-step transfers to manage locks that are [owner-controlled](#controllers-on-lock-actions)
-and have no [app-specific metadata](#app-specific-metadata).
+Funds owners whose wallets do not provide a full-feature integration can use TSv1 two-step transfers to manage [owner-controlled locks](#controllers-on-lock-actions).
 
 ##### Lock Display in Wallets
 
@@ -795,9 +793,8 @@ If `B` accepts this transfer instruction, the existing FA lock remains with `A` 
 The limitations of the compatibility mode are the following:
 
 1. no support for managing locks with custom controllers
-2. no support for managing locks with app-specific metadata
-3. no support for topups, merges, and locked SV reward minting
-4. the locks show as long-lived transfer offers in the wallet UI
+2. no support for topups, merges, and locked SV reward minting
+3. the locks show as long-lived transfer offers in the wallet UI
 
 ### Automatic Enforcement of FA Underlocking
 
@@ -1122,13 +1119,6 @@ We propose that the feature set considered for Increment 1 consists of the FA lo
 
 The subsections within this technical specification provide additional details on implementation aspects relevant to the integration of governance locks with wallets or apps. They rely on the full high-level specification as context, and where possible they refer to code of the [Reference Implementation](#reference-implementation) to avoid duplicating technical details.
 
-### App-Specific Metadata
-
-Apps may associate metadata with a lock, such as an application-specific identifier.
-The Daml interface APIs for governance locks must allow apps to read and set this metadata.
-Governance lock workflows that retain or update a lock must preserve its metadata.
-Governance lock workflows that create new locks must allow specifying the metadata for the newly created lock.
-
 ### Controller Consensus on Withdrawal and Unlock Times
 
 Withdrawing vested funds requires passing in the timepoint up to which the vested funds are computed, which must be in the past. When authorization from multiple vesting controllers is gathered in multiple steps, each step may come with its own timepoint. These timepoints are accumulated in a way that maximizes the benefit of the funds owner: for withdrawal, the timepoints are combined into the time of withdrawal by taking the latest timepoint.
@@ -1195,6 +1185,7 @@ The above priorities also reflect in the following alternatives that we consider
   Requiring the existing owner to initiate the transfer of their funds
   removes that risk.
 * **Make topups a special case of substitutions:** from a technical perspective this would be well possible, as the arguments align well. We rejected this as these two operations are quite different in their intent, and combining them risks confusing users.
+* **Support app-specific lock metadata:** the benefits of associating application-specific metadata with locks do not justify the added complexity for specifying lock substitutions and transfers, which require specifying the metadata for both target and new locks. If a concrete need arises, this support can be added in a future change.
 * **No grace period for permanent removal of underlocked FA rights:** CIP-0116 stipulates that “If locking falls below required thresholds, Featured App status is immediately removed.” Enforcing this strictly would imply that a single operational mistake on a single FA lock would make an FA provider lose their FA status and force them to go through the manual process of reapplying for it. We consider this unnecessary operational overhead, which is why this CIP proposes to immediately suspend the FA status on underlocking, but only permanently revoke it after a grace period.
 * **Switch SV reward minting flows to TBAR:** there were initial considerations of switching SV rewards minting to use the same off-ledger computations as the ones used for traffic-based app rewards. This would allow for slightly less delayed underlock enforcement, as it could be computed exactly as of round start instead of being delayed by about 30s. However the implementation effort for doing this switch is significantly higher than the one for adapting the existing SV reward minting flow.
 * **No minimum lock amount:** the minimum lock amount requirement does complicate the operations of staking apps and it would be great to not have it. However without a minimum lock amount there’s a risk that staking apps do produce lots of small locks. A situation that’s similar to how some wallets used to produce lots of “dust” CC holdings, e.g., as part of marketing campaigns. Every lock does consume resources on SV nodes. A minimum lock amount avoids having to spend delivery resources on scalability problems resulting from “dust locks”.
@@ -1214,8 +1205,11 @@ This CIP is licensed under CC0-1.0: Creative Commons CC0 1.0 Universal.
 
 # Changelog
 
+* Oct 9, 2026:
+  * removed support for app-specific lock metadata
+
 * Oct 8, 2026:
-  * refactored compatibility mode to support transfers and substitutions of owner-controlled locks without metadata
+  * refactored compatibility mode to support transfers and substitutions of owner-controlled locks without app-specific lock metadata
   * added auto-merging of locks before applying substitutions and transfers
 
 * Oct 7, 2026:
