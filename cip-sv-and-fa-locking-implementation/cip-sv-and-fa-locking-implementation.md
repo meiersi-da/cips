@@ -75,7 +75,7 @@ See [Wallet Integration Details](#wallet-integration-concerns) for details on th
 ### Lock Lifecycle
 
 The following sections describe the lock lifecycle.
-See the final section, titled [Compatibility Mode Lifecycle](#compatibility-mode-lifecycle),
+See the final section, titled [Compatibility Mode](#compatibility-mode),
 for details on how the lock lifecycle works when using the compatibility mode based on TSv1 two-step transfers.
 
 #### Creation
@@ -83,7 +83,6 @@ for details on how the lock lifecycle works when using the compatibility mode ba
 All locks are created by the lock owner.
 They must specify the lock type (FA or SV), the lock subject, and the lock amount.
 They may also specify custom controllers for the unlock, withdraw and substitution actions explained below.
-They may further specify custom metadata, e.g., to tag the locks with an application-specific identifier.
 
 ##### Controllers on Lock Actions
 
@@ -114,6 +113,44 @@ The substitution controllers and the unlock controllers are the same. They are c
 
 The vesting controllers control the disbursal of vesting funds, which can happen via withdrawals, substitutions, or transfers.
 In this example, they are chosen such that `S` can automate the withdrawal or substitution of vested funds on behalf of `A` without an extra delegation contract, but `A` can also drive substitutions and withdrawals themselves.
+
+##### Automatic Lock Merging
+
+Locks are identifed by their key, which consists of the lock owner, the lock subject, the lock type, the vesting state, and the custom controllers.
+When a new lock is created with the same key as an existing lock its amount is automatically merged into the existing one.
+This can for example be used to topup an existing lock.
+
+Lock merging is performed on a best effort basis.
+Concurrent lock creations may result in separate locks with the same key being created.
+Furthermore the automatic merging will merge at most 20 locks with the same key to avoid overly large transactions.
+
+Requesting the creation of a lock with amount `0.0` can be used to trigger the automatic merging of existing locks with the same key.
+Repeated merges can be used to eventually merge all existing locks with the same key, even if there are more than 20.
+
+##### Example: Automatic Lock Merging
+
+Suppose `A` creates another FA lock like the one from the [previous example](#example-creating-an-fa-lock), but with a lock amount of 1k CC.
+The new lock is automatically merged with the existing one, resulting in this one lock:
+
+* FA lock with
+  * lock owner: `A`
+  * lock subject: `X`
+  * amount: 5,001,000 CC
+  * substitution controllers: `{S, X} | {S, A} | {A, X}`
+  * unlock controllers: `{S, X} | {S, A} | {A, X}`
+  * vesting controllers: `{S} | {A}`
+
+Suppose `A` then additionally creates the following FA lock:
+
+* FA lock with
+  * lock owner: `A`
+  * lock subject: `X`
+  * amount: 1M CC
+  * substitution controllers: `{S, A}`
+  * unlock controllers: `{S, A}`
+  * vesting controllers: `{S} | {A}`
+
+This lock is not merged with the previous one because its has different substitution and unlock controllers.
 
 #### Unlocking
 
@@ -189,11 +226,11 @@ Note that the amount vesting and the vesting start are changed to represent the 
 
 #### Substitution
 
-Funds owners can create a proposal to use their funds to substitute some (or all) of the locked amount of an existing lock. Substitution works for all types of locks independently of whether they are vesting or not. Substitutions of vesting locks are approved by the vesting controllers, while substitutions of non-vesting locks are approved by the substitution controllers. The new lock to be created is specified as part of the substitution. While it must have the same type as the existing lock, it can have different controllers and [app-specific metadata](#app-specific-metadata).
+Funds owners can create a proposal to use their funds to substitute some (or all) of the locked amount of an existing lock. Substitution works for all types of locks independently of whether they are vesting or not. Substitutions of vesting locks are approved by the vesting controllers, while substitutions of non-vesting locks are approved by the substitution controllers. The new lock to be created is specified as part of the substitution. While it must have the same type as the existing lock, it can have different controllers.
 
 A substitution generally results in two locks of the same type with the same lock subject whose total amount is equal to the amount of the existing lock. The substituted funds in the existing lock are released as liquid CC to the lock owner of the existing lock. Locks whose locked amount would be zero are not created.
 
-In the spirit of maximizing operational flexibility, a special provision is made for substitutions proposed by the owner of the targeted existing lock. Such a proposal does not lock any funds. Instead the funding of the resulting new locks is provided by splitting the funds of the existing lock. This allows lock owners to update the lock controllers and metadata without requiring any extra liquidity. As for normal substitutions, the substitution controllers on the existing lock must approve the substitution for it to succeed. Note that adding extra funds to an existing lock is not possible using substitutions. For that [topups](#topups-merges-and-minting-locked-sv-rewards) should be used.
+In the spirit of maximizing operational flexibility, a special provision is made for substitutions proposed by the owner of the targeted existing lock. Such a proposal does not lock any funds. Instead the funding of the resulting new locks is provided by splitting the funds of the existing lock. This allows lock owners to update the lock controllers without requiring any extra liquidity. As for normal substitutions, the substitution controllers on the existing lock must approve the substitution for it to succeed.
 
 Minimum lock amounts are enforced on all locks resulting from partial substitutions. Lock owners are encouraged to lock amounts that are multiples of the minimum lock amount to avoid failed partial substitutions.
 
@@ -201,9 +238,10 @@ Substitution proposals expire after 90 days to prevent indefinite pending substi
 
 ##### Substitution Target Resolution
 
-Substitution proposals specify the target lock by value. Concretely they specify type, owner, subject, controllers, vesting state, and metadata of their target lock. The amount is intentionally not included to avoid substitutions that cannot be accepted because the amount changed due to concurrent partial unlocks, partial substitutions, topups, or merges.
+Substitution proposals specify the target lock by value. Concretely they specify type, owner, subject, controllers, and vesting state of their target lock. The amount is intentionally not included to avoid substitutions that cannot be accepted because the amount changed due to concurrent partial unlocks or partial substitutions.
 
-The implementation may resolve this target to any lock that matches its specification. No check on the amount is done as part of substitution target resolution, which may lead to failed substitutions if there are substitutions that match the specification but have an amount that is lower than the substitution amount. In these cases we recommend that the lock owners first [merge the locks](#topups-merges-and-minting-locked-sv-rewards) matching the same specification and only then apply the substitution.
+The implementation uses contract keys to resolve this target to all locks that match the specification.
+If there are multiple locks, then it merges up to 20 of them before applying the substitution to reduce the chance of failed substitutions due to insufficient amounts in individual locks.
 
 ##### Example: Substitution of Locked Funds
 
@@ -346,12 +384,12 @@ but are initiated by the owner of the lock whose funds are being transferred and
 
 A transfer proposal is created by the current lock owner.
 It specifies the owner and amount of the new lock to create as a result of the transfer.
-It identifies the target lock by value analogous to substitutions, and the same [limitations regarding target lock resolution](#substitution-target-resolution) apply.
+It identifies and resolves the target lock by value [analogous to substitutions](#substitution-target-resolution).
 
 To complete the transfer, the proposal must be accepted by the new owner and
 the substitution controllers of the target lock (i.e., the vesting controllers for a vesting lock).
-The new owner may also specify the custom controllers and metadata for the new lock as part of accepting it.
-If they do not, then the new lock will be owner-controlled with empty metadata.
+The new owner may also specify the custom controllers for the new lock as part of accepting it.
+If they do not, then the new lock will be owner-controlled.
 
 Minimum lock amounts are enforced on all locks resulting from partial transfers.
 Lock owners are encouraged to lock amounts that are multiples of the minimum lock amount to avoid failed partial transfers.
@@ -408,67 +446,12 @@ Once the transfer is also approved by substitution controllers of the existing l
   * amount: 2M CC
   * substitution controllers: `{S, B}`
 
-#### Topups, Merges, and Minting Locked SV Rewards
+#### Minting SV Rewards into Locks
 
-A topup allows a lock owner to deposit additional funds in an existing lock. They can do so without any extra authorization. They can fund topups using three funding sources: liquid CC, unminted SV rewards, or existing locks with the same attributes as the topup target.
-
-Using unminted SV rewards allows these to be minted directly as locked funds, which is useful in tax regimes that treat unvested and vested rewards differently. When doing so, the lock owner can specify the percentage of rewards that should be added to the locked funds, making it easy for SVs to mint and lock the percentage of their rewards matching their desired tier.
-
-Using existing locks as a funding source enables merging locks with the same attributes, which reduces the overhead of managing these locks.
-
-##### Example: Increase FA lock
-
-Assume that `A` locks 10k CC for `X` using staking app `S`, which is represented by:
-
-* FA Lock with:
-  * contract-id: `cid1`
-  * lock owner: `A`
-  * lock subject: `X`
-  * amount: 10k CC
-  * substitution controllers: `{S}`
-
-Assume that `A` would like to stake an additional 5k CC. They cannot do so by creating a new lock, as that would violate the minimum lock amount. However, they can request the following topup:
-
-* Topup with
-  * topup target: `cid1`
-  * topup amount: 5k
-
-This topup request will immediately succeed and result in:
-
-* FA Lock with:
-  * contract-id: `cid1`
-  * lock owner: `A`
-  * lock subject: `X`
-  * amount: 15k CC
-  * substitution controllers: `{S}`
-
-##### Example: Merge FA Locks
-
-Assume that `A` agreed to substitute five existing FA locks over 1M CC each for lock subject `X` using staking app `S`. They thus have five FA locks of the form:
-
-* FA Lock with:
-  * contract-id: `cid_i` for 1 <= `i` <= 5
-  * lock owner: `A`
-  * lock subject: `X`
-  * amount: 1M CC
-  * substitution controllers: `{S}`
-
-They can merge all of them into a single lock by requesting:
-
-* Topup with
-  * topup target: `cid1`
-  * lock merge inputs: `[cid2, cid3, cid4, cid5]`
-
-The result is:
-
-* FA Lock with:
-  * contract-id: `cid1`
-  * lock owner: `A`
-  * lock subject: `X`
-  * amount: 5M CC
-  * substitution controllers: `{S}`
-
-This can for example be useful to prepare for an upcoming substitution of 2.5M CC, which otherwise would have to be executed as three individual substitutions against three 1M CC locks.
+When creating a lock, SV rewards can be minted directly into the lock,
+which is useful in tax regimes that treat unvested and vested rewards differently.
+When doing so, the lock owner can specify the percentage of rewards that should be added to the locked funds.
+Thereby making it easy for SVs to mint and lock the percentage of their rewards matching their desired tier.
 
 ##### Example: Mint Locked SV Rewards
 
@@ -477,7 +460,6 @@ Assume that an SV `ExampleSV` uses party `A` to lock the required funds for thei
 Thus every round they have:
 
 * SV Lock with:
-  * contract-id: `cid1`
   * lock owner: `A`
   * lock subject: `ExampleSV`
   * amount: `<current-amount>` CC
@@ -487,17 +469,18 @@ Thus every round they have:
   * beneficiary: `A`
   * weight: `<example-weight>`
 
-The minting automation for party `A` can issue the following topup request to mint the SV reward coupon and lock 70% of the minted CC:
+The minting automation for party `A` can issue the following lock creation request to mint the SV reward coupon and lock 70% of the minted CC:
 
-* Topup with
-  * topup target: `cid1`
+* Create SV lock with:
+  * lock owner: `A`
+  * lock subject: `ExampleSV`
+  * SV reward locking percentage: `70%`
   * SV reward coupons: `[cid2]`
-  * reward locking percentage: `70%`
 
-The request will immediately succeed and result in:
+Because created locks are [auto-merged](#automatic-lock-merging),
+the existing lock will be increased by 70% of the minted CC. The result is:
 
 * SV Lock with:
-  * contract-id: `cid1`
   * lock owner: `A`
   * lock subject: `ExampleSV`
   * amount: `<current-amount> + <round r issuance per SV weight> * <example-weight> * 0.7` CC
@@ -505,54 +488,303 @@ The request will immediately succeed and result in:
 
 #### Minimum Lock Amount
 
-Similar to lot sizes in TradFi, FA and SV locks must lock a minimum amount configured by SV voting (default 10k CC). This minimum amount serves to avoid users creating “dust locks” whose management overhead exceeds their value.
+Similar to lot sizes in TradFi, locks must lock a minimum amount configured by SV voting (default 10k CC). This minimum amount serves to avoid users creating “dust locks” whose management overhead exceeds their value.
 
-The minimum amount restriction is enforced on all actions that create additional locks; e.g., when doing a partial unlock or a partial substitution both of the resulting locks must be larger than the minimum amount. Actions that archive at least one existing lock and result in a single new lock are allowed to produce locks with an amount below the minimum. For example, it is always possible to substitute or unlock the whole lock amount or to merge existing locks, even if the SVs voted to increase the minimum lock amount after the locks were created.
+The minimum amount restriction is enforced on all actions that create additional locks; e.g., when creating a new lock or when doing a partial unlock or a partial substitution both of the resulting locks must be larger than the minimum amount. Actions that archive at least one existing lock and result in a single new lock are allowed to produce locks with an amount below the minimum.
+For example, it is always possible to substitute or unlock the whole lock amount or to [topup existing locks via auto-merging](#automatic-lock-merging), even if the SVs voted to increase the minimum lock amount after the locks were created.
 
 Note that new SVs will need to lock the minimum lock amount once they are onboarded to avoid [losing their SV weight as shown in this example](#example-temporary-loss-of-reward-weight).
 
-#### Compatibility Mode Lifecycle
+#### Compatibility Mode
 
-Funds owners whose wallets do not provide a full-feature integration can use TSv1 two-step transfers to create a lock without app-specific metadata and whose unlocking, substitution, and withdrawal is controlled by the funds owner itself.
+Funds owners whose wallets do not provide a full-feature integration can use TSv1 two-step transfers to manage [owner-controlled locks](#controllers-on-lock-actions).
 
-They do so by initiating a TSv1 transfer to a special party with a memo tag that names the lock subject. Concretely, the parameters for the different types of locks are:
+##### Lock Display in Wallets
 
-* SV lock:
-  * receiver: `cip-127_sv-lock::1220000000000000000000000000000000000000000000000000000000000000abcd`
-  * memo tag: `lock-subject=<SV rights owner name>`
-* FA lock:
-  * receiver: `cip-127_fa-lock::1220000000000000000000000000000000000000000000000000000000000000abcd`
-  * memo tag: `lock-subject=<fa-party-id>`
-* Provisional FA lock:
-  * receiver: `cip-127_provisional-fa-lock::1220000000000000000000000000000000000000000000000000000000000000abcd`
-  * memo tag: `lock-subject=<fa-party-id>`
+Locks are displayed in wallets as pending TSv1 transfers with
+
+* sender: `<funds-owner-party-id>`
+* receiver: `cip-127_lock-manager::1220000000000000000000000000000000000000000000000000000000000000abcd`
+* memo tag: `cip-127/memo:<lock-parameters>`
+
+where the lock parameters shown as `key=value` pairs separated by `&`. Governance locks will have the following key-value pairs:
+
+* `lock-kind=<sv-lock|fa-lock|provisional-fa-lock>`
+* `lock-subject=<sv-name|fa-party-id>`
+* `lock-status=locked`
+
+Vesting locks will have the following key-value pairs:
+
+* `lock-kind=<sv-lock|fa-lock|provisional-fa-lock>`
+* `lock-subject=<sv-name|fa-party-id>`
+* `lock-status=vesting`
+* `lock-vesting-duration-micros=<vesting duration in microseconds>`
+* `lock-vesting-end-time-micros=<vesting end time in microseconds since unix epoch>`
+* `lock-vesting-info="vesting for <decimal> days until <date>"`
+
+For example, assume there is a vesting FA lock created at the start of the Unix epoch 1970-01-01T00:00:00Z:
+
+* Vesting FA lock with
+  * lock owner: `A`
+  * lock subject: `X`
+  * amount vesting: 1M CC
+  * vesting duration: `60 days` = `5,184,000` seconds
+  * vesting end: `0 + 60 days` = `60 × 24 × 60 × 60` = `5,184,000` seconds after Unix epoch
+
+This lock would be displayed in the wallet as a pending TSv1 transfer with:
+
+* sender: `A`
+* receiver: `cip-127_lock-manager::1220000000000000000000000000000000000000000000000000000000000000abcd`
+* amount: 1M CC
+* memo: `cip-127/memo:lock-kind=fa-lock&lock-subject=X&lock-status=vesting&lock-vesting-duration-micros=5184000000000&lock-vesting-end-time-micros=5184000000000&lock-vesting-info="vesting for 60.0 days until 1970-03-02T00:00:00Z"`
+
+The reason for representing the vesting durations and end times in microseconds is to enable precise
+round-tripping of that information when specifying the target of substitutions and transfers.
+The `lock-vesting-info` field provides a human-readable summary of the vesting schedule.
+
+##### Lock Actions
+
+Actions on locks are performed by initiating a TSv1 transfer to the special `cip-127_lock-manager::1220000000000000000000000000000000000000000000000000000000000000abcd` party with a memo tag that specifies the request and its parameters.
+The supported actions are: creating locks, starting vesting, withdrawing vested funds, substituting locks, and transferring locks.
+We explain them in the following sections.
+
+###### Creating Locks
+
+* sender: `<funds-owner-party-id>`
+* receiver: `cip-127_lock-manager::1220000000000000000000000000000000000000000000000000000000000000abcd`
+* amount: `<amount-to-lock>`
+* memo tag: `cip-127/memo:`
+  * `request=create-lock&`
+  * `lock-kind=<sv-lock|fa-lock|provisional-fa-lock>&`
+  * `lock-subject=<sv-name|fa-party-id>`
 
 The SV rights owner names correspond to the names that are currently specified in [`approved-sv-id-values.yaml`](https://github.com/canton-foundation/configs/blob/main/configs/MainNet/approved-sv-id-values.yaml). Only minimal fat-finger error protection is provided: they only check that (a) the memo tag field starts with `lock-subject=`, (b) the parsed SV rights owner names consist of alphanumeric characters and hyphens (`-`), and (c) the FA parties are registered parties on the global synchronizer. It is the responsibility of the funds owner to specify the right values.
 
-The funds owner can always request unlocking the funds by withdrawing the transfer offer. It immediately starts vesting. The transfer offer itself continues to be shown in the wallet, but with a changed state that reports that the funds are vesting.
+*Example:* Party `A` can create a 5M CC FA lock for app provider party `X` by initiating the following transfer:
 
-The funds owner can withdraw the vested funds by calling withdraw on the transfer offer again. If all funds have vested, the transfer offer is archived. Otherwise it remains in the wallet, but with a transfer offer amount reduced by the amount of funds that have vested and were paid out.
+* sender: `A`
+* receiver: `cip-127_lock-manager::1220000000000000000000000000000000000000000000000000000000000000abcd`
+* amount: 5M CC
+* memo tag: `cip-127/memo:request=create-lock&lock-kind=fa-lock&lock-subject=X`
 
-The status of a lock is reported as a prefix in the memo tag of the transfer offer.
-The prefix is `lock-status=<status>&` where `<status>` can be one of the following:
+###### Unlocking Locks
 
-* `locked`: the funds are currently locked and are counted towards the lock threshold
-* `vesting-until-<end-time>`: the funds are vesting until the specified end time
+* sender: `<funds-owner-party-id>`
+* receiver: `cip-127_lock-manager::1220000000000000000000000000000000000000000000000000000000000000abcd`
+* amount: `<ignored>`
+* memo tag: `cip-127/memo:`
+  * `request=unlock-and-start-vesting&`
+  * `unlock-amount=<amount-to-unlock>&`
+  * `vesting-start-time=<vesting start time in ISO 8601 format>&`
+  * `lock-kind=<sv-lock|fa-lock|provisional-fa-lock>&`
+  * `lock-subject=<sv-name|fa-party-id>`
 
-For example, the memo tag `lock-status=locked&lock-subject=ExampleSV` indicates that the funds are
-currently locked for `ExampleSV` and count towards their lock threshold.
+Note that the  `amount` field in the transfer instruction is not used as the
+specification of the amount to unlock, as that would require wallets to provide
+input holdings over the whole amount to unlock.
+Ideally, wallets allow specifying `0.0` as the input amount and
+do not fetch any input holdings in that case.
+Specifying any other amount is also possible, but it will be ignored by the lock manager
+and the provided holdings will be returned unchanged.
 
+The transfer must be submitted to the network before the vesting start time,
+as otherwise the vesting schedule could be circumvented by backdating the vesting start time.
+The transfer is rejected if the vesting start is more than 24h in the future to avoid fat finger mistakes.
+
+Unlocking provisional locks does not require to specify the vesting start time, as provisional FA locks do not go through a vesting period.
+
+*Example:* Assume party `A` has the following FA lock:
+
+* FA lock with
+  * lock owner: `A`
+  * lock subject: `X`
+  * amount: 5M CC
+
+`A` can unlock 1M CC from this lock, starting vesting at
+`2030-01-01T00:00:00Z`, by initiating the following transfer:
+
+* sender: `A`
+* receiver: `cip-127_lock-manager::1220000000000000000000000000000000000000000000000000000000000000abcd`
+* amount: 0.0 CC
+* memo tag: `cip-127/memo:request=unlock-and-start-vesting&unlock-amount=1000000&vesting-start-time=2030-01-01T00:00:00Z&lock-kind=fa-lock&lock-subject=X`
+
+The transfer amount is ignored; `unlock-amount` specifies how much to unlock. The vesting start
+time is `2030-01-01T00:00:00Z` expressed in ISO 8601 format using the UTC timezone.
+Assuming the FA vesting duration is 60 days, the result is a 1M CC vesting lock displayed in the
+wallet as the following pending transfer instruction:
+
+* sender: `A`
+* receiver: `cip-127_lock-manager::1220000000000000000000000000000000000000000000000000000000000000abcd`
+* amount: 1M CC
+* memo tag: `cip-127/memo:lock-kind=fa-lock&lock-subject=X&lock-status=vesting&lock-vesting-duration-micros=5184000000000&lock-vesting-end-time-micros=1898640000000000&lock-vesting-info="vesting for 60.0 days until 2030-03-02T00:00:00Z"`
+
+###### Withdrawing from Vesting Locks
+
+* sender: `<funds-owner-party-id>`
+* receiver: `cip-127_lock-manager::1220000000000000000000000000000000000000000000000000000000000000abcd`
+* amount: `<ignored>`
+* memo tag: `cip-127/memo:`
+  * `request=withdraw-vested-funds&`
+  * `vested-until-time=<withdrawal time in ISO 8601 format>&`
+  * `lock-kind=<sv-lock|fa-lock|provisional-fa-lock>&`
+  * `lock-subject=<sv-name|fa-party-id>&`
+  * `lock-status=vesting&`
+  * `lock-vesting-duration-micros=<vesting duration in microseconds>&`
+  * `lock-vesting-end-time-micros=<vesting end time in microseconds since unix epoch>`
+
+As with unlocking, the transfer amount is ignored; wallets should use `0.0` when possible.
+The `vested-until-time` specifies the point as of which vested funds should be computed and withdrawn.
+It must be in the past.
+The remaining fields identify the vesting lock from which the funds are being withdrawn.
+They can be copied from the original lock's memo as displayed in the wallet.
+
+*Example:* Continuing from the unlock example above, after `2030-01-16T00:00:00Z` party `A` can
+withdraw the 250,000 CC vested in the first 15 days by submitting:
+
+* sender: `A`
+* receiver: `cip-127_lock-manager::1220000000000000000000000000000000000000000000000000000000000000abcd`
+* amount: 0.0 CC
+* memo tag: `cip-127/memo:request=withdraw-vested-funds&vested-until-time=2030-01-16T00:00:00Z&lock-kind=fa-lock&lock-subject=X&lock-status=vesting&lock-vesting-duration-micros=5184000000000&lock-vesting-end-time-micros=1898640000000000`
+
+The result is a payout of 250,000 CC to `A` and the following updated vesting lock, displayed in the wallet as a pending transfer instruction:
+
+* sender: `A`
+* receiver: `cip-127_lock-manager::1220000000000000000000000000000000000000000000000000000000000000abcd`
+* amount: 750,000 CC
+* memo tag: `cip-127/memo:lock-kind=fa-lock&lock-subject=X&lock-status=vesting&lock-vesting-duration-micros=3888000000000&lock-vesting-end-time-micros=1898640000000000&lock-vesting-info="vesting for 45.0 days until 2030-03-02T00:00:00Z"`
+
+###### Substituting Locks
+
+Substitutions are initiated by the owner of the substituted funds using a transfer of the following form:
+
+* sender: `<new-lock-owner-party-id>`
+* receiver: `cip-127_lock-manager::1220000000000000000000000000000000000000000000000000000000000000abcd`
+* amount: `<amount-to-substitute>`
+* memo tag: `cip-127/memo:`
+  * `request=substitute-lock&`
+  * `target-lock-owner=<target-lock-owner-party-id>&`
+  * `lock-kind=<sv-lock|fa-lock|provisional-fa-lock>&`
+  * `lock-subject=<sv-name|fa-party-id>&`
+  * `lock-status=<locked|vesting>`
+  * for vesting locks, also include
+    * `lock-vesting-duration-micros=<vesting duration in microseconds>&`
+    * `lock-vesting-end-time-micros=<vesting end time in microseconds since unix epoch>`
+
+The result is a pending transfer instruction visible to both `<new-lock-owner-party-id>` and `<target-lock-owner-party-id>` with the following details:
+
+* sender: `<new-lock-owner-party-id>`
+* receiver: `<target-lock-owner-party-id>`
+* amount: `<amount-to-substitute>`
+* memo tag: `cip-127/memo:`
+  * `request=accept-to-substitute-lock&`
+  * `lock-kind=<sv-lock|fa-lock|provisional-fa-lock>&`
+  * `lock-subject=<sv-name|fa-party-id>&`
+  * `lock-status=<locked|vesting>`
+  * for vesting locks, also include
+    * `lock-vesting-duration-micros=<vesting duration in microseconds>&`
+    * `lock-vesting-end-time-micros=<vesting end time in microseconds since unix epoch>`
+
+The target lock owner can accept or reject the substitution by accepting or rejecting the pending transfer instruction using their wallet.
+The new lock owner can withdraw the substitution by withdrawing the pending transfer instruction using their wallet.
+
+*Example:* Assume party `A` owns the following FA lock:
+
+* FA lock with
+  * lock owner: `A`
+  * lock subject: `X`
+  * amount: 5M CC
+
+Party `B` can propose substituting 1M CC of this lock by initiating the transfer:
+
+* sender: `B`
+* receiver: `cip-127_lock-manager::1220000000000000000000000000000000000000000000000000000000000000abcd`
+* amount: 1M CC
+* memo tag: `cip-127/memo:request=substitute-lock&target-lock-owner=A&lock-kind=fa-lock&lock-subject=X&lock-status=locked`
+
+This creates a pending transfer instruction for `A` to accept:
+
+* sender: `B`
+* receiver: `A`
+* amount: 1M CC
+* memo tag: `cip-127/memo:request=accept-to-substitute-lock&lock-kind=fa-lock&lock-subject=X&lock-status=locked`
+
+If `A` accepts this transfer instruction, then 1M CC is paid out to `A`, the existing FA lock is reduced to 4M CC, and a new owner-controlled FA lock for `B` is created with subject `X` and amount 1M CC.
+`B`'s wallet will display the new lock as this pending transfer instruction:
+
+* sender: `B`
+* receiver: `cip-127_lock-manager::1220000000000000000000000000000000000000000000000000000000000000abcd`
+* amount: 1M CC
+* memo tag: `cip-127/memo:lock-kind=fa-lock&lock-subject=X&lock-status=locked`
+
+###### Transferring Locks
+
+Transfers are initiated by the current owner of the target lock using a transfer of the following form:
+
+* sender: `<current-lock-owner-party-id>`
+* receiver: `cip-127_lock-manager::1220000000000000000000000000000000000000000000000000000000000000abcd`
+* amount: `<ignored>`
+* memo tag: `cip-127/memo:`
+  * `request=transfer-lock&`
+  * `new-lock-owner=<new-lock-owner-party-id>&`
+  * `start-transfer-before-time=<iso-8601 timestamp>&`
+  * `lock-kind=<sv-lock|fa-lock|provisional-fa-lock>&`
+  * `lock-subject=<sv-name|fa-party-id>&`
+  * `lock-status=<locked|vesting>`
+  * for vesting locks, also include
+    * `lock-vesting-duration-micros=<vesting duration in microseconds>&`
+    * `lock-vesting-end-time-micros=<vesting end time in microseconds since unix epoch>`
+
+The result is a pending transfer instruction visible to both `<current-lock-owner-party-id>` and `<new-lock-owner-party-id>` with the following details:
+
+* sender: `<current-lock-owner-party-id>`
+* receiver: `<new-lock-owner-party-id>`
+* amount: `<amount-to-transfer>`
+* memo tag: `cip-127/memo:`
+  * `request=accept-to-transfer-lock&`
+  * `lock-kind=<sv-lock|fa-lock|provisional-fa-lock>&`
+  * `lock-subject=<sv-name|fa-party-id>&`
+  * `lock-status=<locked|vesting>`
+  * for vesting locks, also include
+    * `lock-vesting-duration-micros=<vesting duration in microseconds>&`
+    * `lock-vesting-end-time-micros=<vesting end time in microseconds since unix epoch>`
+
+The new lock owner can accept or reject the proposal by accepting or rejecting the pending transfer instruction using their wallet. The current lock owner can withdraw the proposal by withdrawing the pending transfer instruction.
+
+*Example:* Assume party `A` owns the following FA lock:
+
+* FA lock with
+  * lock owner: `A`
+  * lock subject: `X`
+  * amount: 5M CC
+
+Party `A` can propose transferring 2M CC of this lock to party `B` by initiating:
+
+* sender: `A`
+* receiver: `cip-127_lock-manager::1220000000000000000000000000000000000000000000000000000000000000abcd`
+* amount: 0.0 CC
+* memo tag: `cip-127/memo:request=transfer-lock&new-lock-owner=B&transfer-amount=2000000&lock-kind=fa-lock&lock-subject=X&lock-status=locked`
+
+This creates a pending transfer instruction for `B` to accept:
+
+* sender: `A`
+* receiver: `B`
+* amount: 2M CC
+* memo tag: `cip-127/memo:request=accept-to-transfer-lock&lock-kind=fa-lock&lock-subject=X&lock-status=locked`
+
+If `B` accepts this transfer instruction, the existing FA lock remains with `A` and is reduced to 3M CC, and a new owner-controlled FA lock for `B` is created with subject `X` and amount 2M CC. `B`'s wallet will display the new lock as this pending transfer instruction:
+
+* sender: `B`
+* receiver: `cip-127_lock-manager::1220000000000000000000000000000000000000000000000000000000000000abcd`
+* amount: 2M CC
+* memo tag: `cip-127/memo:lock-kind=fa-lock&lock-subject=X&lock-status=locked`
 
 ##### Limitations
 
 The limitations of the compatibility mode are the following:
 
-1. no support for custom unlock, substitution, and vesting controllers
-2. no support for substitution or transfers
-3. no support for topups, merges, and locked SV reward minting
-4. the locks show as long-lived transfer offers in the wallet UI
-5. extra metadata must be provided to guarantee a 24h prepare-submission delay
-  (see [Compatibility Mode Details](#compatibility-mode-details))
+1. no support for managing locks with custom controllers
+2. no support for locked SV reward minting
+3. the locks show as long-lived transfer offers in the wallet UI
 
 ### Automatic Enforcement of FA Underlocking
 
@@ -633,7 +865,7 @@ No automatic unlocking of funds happens. However `X` can unlock their remaining 
 
 ### Automated SV Reward Locking
 
-We propose to extend the reward minting automation of validator nodes to mint a percentage of SV rewards directly in locked form by [topping up an existing lock](#topups-merges-and-minting-locked-sv-rewards). Concretely, we expect validator nodes to accept a configuration as shown in the following example:
+We propose to extend the reward minting automation of validator nodes to [mint a percentage of SV rewards directly in locked form](#minting-sv-rewards-into-locks). Concretely, we expect validator nodes to accept a configuration as shown in the following example:
 
 ```textproto
 canton.validator-apps.validator_backend {
@@ -847,16 +1079,27 @@ and the `ExampleSV` thus permanently only earns 60% of their SV weight.
 
 ## Incremental Delivery Plan
 
-We propose an incremental delivery that focuses first on on-chain enforcement of locks and then on improving the UX for maintaining these locks. Concretely, we propose the following increments of the features specified in the [High-Level Specification](#high-level-specification):
+We propose an incremental delivery that focuses first on on-chain enforcement of locks and their vesting schedules,
+and then on reducing the operational overhead for managing them.
+Concretely, we propose the following increments of the features specified in the [High-Level Specification](#high-level-specification):
 
-1. **Compatibility mode for SV locks:** implement the compatibility mode based on the TSv1 APIs for creating SV locks. Locks must always lock an SV determined minimal amount of CC.
-2. **Compatibility mode for FA locks:** implement the compatibility mode based on the TSv1 APIs for creating (provisional) FA locks; and add SV automation to convert provisional into full FA locks once the corresponding featured app right is created.
-3. **Basic SV and FA locks and non-default controllers:** support creating and interacting with SV and (provisional) FA locks, including custom controllers for unlocking, substitution and withdrawal.
-4. **Substitution and transfers for SV and FA locks:** support proposing substitutions and transfers of (vesting) SV and FA locks as described in the section on [Substitution](#substitution) and [Transfers](#transfers).
-5. **Topups and Merges for SV and FA locks:** support topups and merges, including minting SV rewards directly in locked form into an existing SV lock.
-6. **Automatic enforcement of FA underlocking:** FA underlocks are tracked and automatically enforced after a seven day grace period.
-7. **SV lock top-up automation:** extend the minting automation of validator nodes to mint a target percentage of SV rewards in locked form.
-8. **Automatic enforcement of SV underlocking:** SV lifetime rewards are tracked on chain and used to detect SV underlocks. SV nodes run automation that enforces both temporary and permanent weight changes on-chain until the SV lock-up requirement terminates.
+1. **Compatibility mode for SV and FA locks:**
+   implement all operations of the [compatibility mode](#compatibility-mode) for managing SV and FA locks using the TSv1 APIs.
+   Locks must always lock an SV determined minimal amount of CC.
+2. **Provisional FA locks:**
+   implement support for provisional FA locks;
+   and add SV automation to convert provisional into full FA locks once the corresponding featured app right is created.
+3. **Support custom controllers:**
+   allow creating SV and FA locks with [custom controllers](#controllers-on-lock-actions); and add
+   an API for wallets and staking apps to support all operations on such locks.
+4. **Automatic enforcement of FA underlocking:** FA underlocks are tracked and automatically enforced after a seven day grace period.
+5. **SV lock top-up automation:**
+   allow minting SV rewards directly in locked form into an existing SV lock; and
+   extend the minting automation of validator nodes to make use of that.
+6. **Automatic enforcement of SV underlocking:**
+   SV lifetime rewards are tracked on chain and used to detect SV underlocks.
+   SV nodes run automation that enforces both temporary and permanent weight changes on-chain until the SV lock-up requirement terminates.
+
 
 ### Migration to On-Chain Enforcement of SV Locks
 
@@ -878,18 +1121,11 @@ Analogous to the incremental delivery, we propose to incrementally move the enfo
 1. **Require on-chain FA locks:** the foundation switches their dashboards to also incorporate on-chain FA locks in the total locked amounts. Once the feature set of FA locks on MainNet is sufficient for staking apps to transition their funds, the FA operators and staking apps are given 30 days to transition their FA locks to on-chain locks.
 2. **Relieve foundation of FA lock enforcement:** once “Automatic enforcement of FA underlocking” goes live on MainNet the foundation can stop monitoring and enforcing FA underlocks via manual SV votes.
 
-We propose that the feature set considered for Increment 1 consists of the FA lock compatibility mode, basic FA locks with custom controllers,  substitutions, and transfers. We propose that topups and merges of FA locks are not a strict requirement, but should be delivered soon thereafter.
+We propose that the feature set considered for Step 1 consists of the FA lock compatibility mode and support for custom controllers.
 
 ## Technical Specification
 
 The subsections within this technical specification provide additional details on implementation aspects relevant to the integration of governance locks with wallets or apps. They rely on the full high-level specification as context, and where possible they refer to code of the [Reference Implementation](#reference-implementation) to avoid duplicating technical details.
-
-### App-Specific Metadata
-
-Apps may associate metadata with a lock, such as an application-specific identifier.
-The Daml interface APIs for governance locks must allow apps to read and set this metadata.
-Governance lock workflows that retain or update a lock must preserve its metadata.
-Governance lock workflows that create new locks must allow specifying the metadata for the newly created lock.
 
 ### Controller Consensus on Withdrawal and Unlock Times
 
@@ -953,7 +1189,7 @@ The above priorities also reflect in the following alternatives that we consider
   claiming funds from the existing owner.
   Requiring the existing owner to initiate the transfer of their funds
   removes that risk.
-* **Make topups a special case of substitutions:** from a technical perspective this would be well possible, as the arguments align well. We rejected this as these two operations are quite different in their intent, and combining them risks confusing users.
+* **Support app-specific lock metadata:** the benefits of associating application-specific metadata with locks do not justify the added complexity for specifying lock substitutions and transfers, which require specifying the metadata for both target and new locks. If a concrete need arises, this support can be added in a future change.
 * **No grace period for permanent removal of underlocked FA rights:** CIP-0116 stipulates that “If locking falls below required thresholds, Featured App status is immediately removed.” Enforcing this strictly would imply that a single operational mistake on a single FA lock would make an FA provider lose their FA status and force them to go through the manual process of reapplying for it. We consider this unnecessary operational overhead, which is why this CIP proposes to immediately suspend the FA status on underlocking, but only permanently revoke it after a grace period.
 * **Switch SV reward minting flows to TBAR:** there were initial considerations of switching SV rewards minting to use the same off-ledger computations as the ones used for traffic-based app rewards. This would allow for slightly less delayed underlock enforcement, as it could be computed exactly as of round start instead of being delayed by about 30s. However the implementation effort for doing this switch is significantly higher than the one for adapting the existing SV reward minting flow.
 * **No minimum lock amount:** the minimum lock amount requirement does complicate the operations of staking apps and it would be great to not have it. However without a minimum lock amount there’s a risk that staking apps do produce lots of small locks. A situation that’s similar to how some wallets used to produce lots of “dust” CC holdings, e.g., as part of marketing campaigns. Every lock does consume resources on SV nodes. A minimum lock amount avoids having to spend delivery resources on scalability problems resulting from “dust locks”.
@@ -976,9 +1212,13 @@ This CIP is licensed under CC0-1.0: Creative Commons CC0 1.0 Universal.
 
 # Changelog
 
-* Oct 9, 2026: Incorporated additional review feedback:
+* Oct 9, 2026:
   * simplify termination of SV lock-up by just stopping enforcement
   * remove grace period for temporary loss of SV weight
+  * removed support for app-specific lock metadata
+  * remove explicit top-up operations in favor of the simpler and more general automatic lock merging
+  * refactored compatibility mode to support transfers and substitutions of owner-controlled locks
+  * adjust incremental delivery plan to deliver transfers and substitutions as part of Increment 1
 
 * Oct 7, 2026:
 
