@@ -926,14 +926,11 @@ This CIP serves to align the stakeholders of [CIP-0105](../cip-0105/cip-0105.md)
 The business rationale for SV and FA locking and their vesting and underlock enforcement was already given as part of [CIP-0105](../cip-0105/cip-0105.md) and [CIP-0116](../cip-0116/cip-0116.md). Where we had to make design choices for this CIP, we optimized for the following priorities:
 
 1. Transition to on-chain SV and FA locks as quickly as possible.
-2. Maximize the total value locked on-chain.
-3. Enable credit markets for SV and FA locks (e.g., staking apps) to be built.
-4. Minimize the confusion of users using wallets to interact with locks.
-5. Minimize the delivery cost of the implementation.
+2. Enable credit markets for SV and FA locks (e.g., staking apps) to be built.
+3. Minimize the confusion of users using wallets to interact with locks.
+4. Minimize the delivery cost of the implementation.
 
-Note that Priority 3 is implied by Priority 2, as a well-functioning credit market makes it easier for FAs and SVs to fund their locking requirements. We call it out separately as it was a key priority in the design.
-
-### Alternatives Considered
+## Alternatives Considered
 
 The above priorities also reflect in the following alternatives that we considered and rejected for particular implementation choices.
 
