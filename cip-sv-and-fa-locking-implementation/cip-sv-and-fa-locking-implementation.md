@@ -95,16 +95,6 @@ All controllers are made observers of the lock contract, so they can monitor its
 
 The controllers can provide their authorization for an action individually one after the other in their own Daml transaction; or jointly in a single transaction. The former is useful when the controllers are each using their own wallet to authorize an action. They do so by executing the action they want to confirm, which only happens once a sufficient set of controllers have authorized it. Joint authorization in a single transaction is useful when their authorization is managed via a third-party app.
 
-##### Automatic Lock Merging
-
-Locks are identifed by their key, which consists of the lock owner, the lock subject, the lock type, the custom controllers.
-When a new lock is created with the same key as an existing lock its amount is automatically merged into the existing one.
-This can for example be used to topup an existing lock.
-
-Lock merging is performed on a best effort basis.
-Concurrent lock creations may result in separate locks with the same key being created.
-Furthermore the automatic merging will merge at most 20 locks with the same key to avoid overly large transactions.
-
 ##### Example: Creating an FA Lock
 
 The following FA lock is an example of a lock that a staking app `S` might create:
@@ -124,9 +114,22 @@ The substitution controllers and the unlock controllers are the same. They are c
 The vesting controllers control the disbursal of vesting funds, which can happen via withdrawals, substitutions, or transfers.
 In this example, they are chosen such that `S` can automate the withdrawal or substitution of vested funds on behalf of `A` without an extra delegation contract, but `A` can also drive substitutions and withdrawals themselves.
 
+##### Automatic Lock Merging
+
+Locks are identifed by their key, which consists of the lock owner, the lock subject, the lock type, the vesting state, and the custom controllers.
+When a new lock is created with the same key as an existing lock its amount is automatically merged into the existing one.
+This can for example be used to topup an existing lock.
+
+Lock merging is performed on a best effort basis.
+Concurrent lock creations may result in separate locks with the same key being created.
+Furthermore the automatic merging will merge at most 20 locks with the same key to avoid overly large transactions.
+
+Requesting the creation of a lock with amount `0.0` can be used to trigger the automatic merging of existing locks with the same key.
+Repeated merges can be used to eventually merge all existing locks with the same key, even if there are more than 20.
+
 ##### Example: Automatic Lock Merging
 
-Suppose `A` creates another FA lock like the one from the previous example, but with a lock amount of 1k CC.
+Suppose `A` creates another FA lock like the one from the [previous example](#example-creating-an-fa-lock), but with a lock amount of 1k CC.
 The new lock is automatically merged with the existing one, resulting in this one lock:
 
 * FA lock with
@@ -581,11 +584,14 @@ specification of the amount to unlock, as that would require wallets to provide
 input holdings over the whole amount to unlock.
 Ideally, wallets allow specifying `0.0` as the input amount and
 do not fetch any input holdings in that case.
-Specifying any other amount is also possible, but it will be ignored by the lock manager.
+Specifying any other amount is also possible, but it will be ignored by the lock manager
+and the provided holdings will be returned unchanged.
 
 The transfer must be submitted to the network before the vesting start time,
 as otherwise the vesting schedule could be circumvented by backdating the vesting start time.
 The transfer is rejected if the vesting start is more than 24h in the future to avoid fat finger mistakes.
+
+Unlocking provisional locks does not require to specify the vesting start time, as provisional FA locks do not go through a vesting period.
 
 *Example:* Assume party `A` has the following FA lock:
 
@@ -720,7 +726,7 @@ Transfers are initiated by the current owner of the target lock using a transfer
 * memo tag: `cip-127/memo:`
   * `request=transfer-lock&`
   * `new-lock-owner=<new-lock-owner-party-id>&`
-  * `transfer-amount=<amount-to-transfer>&`
+  * `start-transfer-before-time=<iso-8601 timestamp>&`
   * `lock-kind=<sv-lock|fa-lock|provisional-fa-lock>&`
   * `lock-subject=<sv-name|fa-party-id>&`
   * `lock-status=<locked|vesting>`
@@ -1207,14 +1213,12 @@ This CIP is licensed under CC0-1.0: Creative Commons CC0 1.0 Universal.
 # Changelog
 
 * Oct 9, 2026:
-  * removed support for app-specific lock metadata
   * simplify termination of SV lock-up by just stopping enforcement
   * remove grace period for temporary loss of SV weight
+  * removed support for app-specific lock metadata
   * remove explicit top-up operations in favor of the simpler and more general automatic lock merging
-
-* Oct 8, 2026:
-  * refactored compatibility mode to support transfers and substitutions of owner-controlled locks without app-specific lock metadata
-  * added auto-merging of locks before applying substitutions and transfers
+  * refactored compatibility mode to support transfers and substitutions of owner-controlled locks
+  * adjust incremental delivery plan to deliver transfers and substitutions as part of Increment 1
 
 * Oct 7, 2026:
 
