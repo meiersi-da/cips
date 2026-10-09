@@ -113,6 +113,8 @@ data CredentialView = CredentialView with
      -- ^ The credential associated with this record.
    createdAt : Optional Time
      -- ^ The time at which this credential record was created.
+     --
+     -- On a record created by `CredentialFactory_UpdateCredentials`, this is that choice's `requestedAt`.
    expiresAt : Optional Time
      -- ^ The time at which this credential record expires in the registry.
      --
@@ -177,12 +179,14 @@ The purpose of this API is to enable credential issuers and holders to *jointly*
 
 Implementing this API is optional for credential registries. They CAN decide to only support registry internal workflows for creating credentials, and not offer third-party issuers the right to publish credentials to that registry.
 
-This API uses the factory pattern pioneered in CIP-56: the `CredentialFactory` Daml interface provides a choice `CredentialFactory_UpdateCredentials` that allows for a bulk update of credentials with the same issuer and holder. The choice takes `requestedAt`, the time when the creation of the new record was requested. Callers supply it so that implementations can compute expiry without `getTime`. A corresponding HTTP API endpoint allows retrieval of the context to call that choice.
+This API uses the factory pattern pioneered in CIP-56: the `CredentialFactory` Daml interface provides a choice `CredentialFactory_UpdateCredentials` that allows for a bulk update of credentials with the same issuer and holder. The choice takes `requestedAt`, the time when the creation of the new record was requested. Callers supply it so that implementations can compute expiry without `getTime`. Callers MUST set `requestedAt` in the past, and SHOULD set it close to ledger time, because the free period is measured from it. The new record's `createdAt` is that `requestedAt`. A corresponding HTTP API endpoint allows retrieval of the context to call that choice.
 
 Draft specifications of these two interfaces can be found in the draft PR here:
 
 * [Splice/Api/Credential/RegistryV1.daml](https://github.com/hyperledger-labs/splice/pull/3416/changes#diff-808147bf36f1c087a42b92d67d2021c2ca203076cc0e3b6a31f2ccc60497a34d) (includes the data format of credentials)
 * [openapi/credential-registry-v1.yaml](https://github.com/hyperledger-labs/splice/pull/3416/changes#diff-a73145dfdb26770f01b5fc0a9f35c7c34f067584acb6ec16de7e82040df6f835)
+
+In that draft the factory argument is still named `newCreatedAt`. This CIP calls it `requestedAt`.
 
 #### Expected App Usage of Daml APIs
 
@@ -227,27 +231,31 @@ It implements all the APIs defined above side-by-side with the existing ANS 1.0 
 By default, there is no CC payment required for creating credential records in the registry.
 Instead, the registry expires the records at the end of a free period, 90 days by default (configurable by SV voting),
 so that the traffic cost of creating and renewing them covers their storage cost.
-This CIP does not define automatic renewal. Unpaid renewal is a new credential with the same claims. Last-write-wins under Lookup prefers it. Applications SHOULD create that replacement about 24 hours before `expiresAt`, so prepared transactions on the old contract id are less likely to contend with archival.
+This CIP does not define automatic renewal. Unpaid renewal is a new credential with the same claims. A client that implements the Lookup last-write-wins rule selects that new record. Applications SHOULD create that replacement about 24 hours before `expiresAt`, so prepared transactions on the old contract id are less likely to contend with archival.
 
 ### Extended Expiration Durations
 
-The registry optionally supports extending the expiration duration of records beyond that free period by burning a CC fee (default 1 $/year, configurable by SV voting).
-The duration beyond the free period for a record is the USD value of the CC burned for that record, divided by the $/year fee.
-If no CC is burned for that record, that duration is zero.
-`expiresAt` is the transfer's `requestedAt` plus the free period plus that duration.
+The registry optionally supports extending the expiration of an existing record by burning a CC fee (default 1 $/year, configurable by SV voting).
+The purchased duration is the USD value of the CC burned for that record, divided by the $/year fee.
+A paid extension archives the record being extended and creates a replacement with the same claims and the same `createdAt`.
+`transfer.requestedAt` is the wallet timestamp on the Token Standard transfer, and it MUST already be in the past.
+If the archived record has no `expiresAt`, the transfer is rejected.
+If `expiresAt` is later than `transfer.requestedAt`, the replacement's `expiresAt` is that `expiresAt` plus the purchased duration.
+If `expiresAt` is earlier than or equal to `transfer.requestedAt`, the replacement's `expiresAt` is `transfer.requestedAt` plus the purchased duration.
 If `validUntil` is set, the resulting `expiresAt` is not later than `validUntil`.
+The free period applies only when a record is created or renewed without a CC burn.
 
-`CredentialFactory_UpdateCredentials` creates a credential without burning CC. Its `expiresAt` is that choice's `requestedAt` plus the free period, and not later than `validUntil` when `validUntil` is set.
+`CredentialFactory_UpdateCredentials` creates a credential without burning CC. The new record's `createdAt` is that choice's `requestedAt`, and `expiresAt` is `requestedAt` plus the free period, capped by `validUntil` when `validUntil` is set.
 
-Extending a credential is a Token Standard V2 transfer exercised on the `TransferFactory` implemented by `AnsRules`. The credential must already exist. The transfer uses:
+Extending a credential is a transfer on the `TransferFactory` implemented by `AnsRules`. The credential must already exist. The replacement is signed by the holder and the issuer. The receiver party is `cip-tbd_credential-expiry::1220000000000000000000000000000000000000000000000000000000000000abcd`. No participant hosts that party, so the factory omits it from the transfer's informees.
 
-- `sender`: a basic account of the holder or the issuer.
-- `receiver`: the party `cip-tbd_credential-expiry::1220000000000000000000000000000000000000000000000000000000000000abcd`. No participant hosts this party.
-- `amount`: the CC to burn. The amount must be positive.
-- `actors`: both the holder and the issuer. The replacement record is signed by both. A Token Standard V1 transfer is authorized only by the sender, so it cannot extend a credential.
-- `extraArgs.context`: `cip-tbd/credential-id` set to the contract id of the record being extended. The value is an `AV_ContractId`, not `Text`. The caller sets this key.
+On Token Standard V2, `transfer.sender` is a basic account of the holder or the issuer, and `transfer.receiver` is the basic account of the receiver party. A basic account is an `Account` whose owner is that party, with no provider and an empty account id. `actors` are the holder and the issuer. When they are the same party, that party is the only actor. `transfer.amount` is the CC to burn, and it must be positive. `extraArgs.context` carries `cip-tbd/credential-id` as an `AV_ContractId` of the record being extended.
 
-The factory burns the transferred CC. It archives that record and creates a replacement with the same claims and the same `createdAt`. The replacement's `expiresAt` is computed from this transfer. A credential issuance app prepares the transfer for the holder and the issuer.
+On Token Standard V1, the same extension works when the issuer and the holder are the same party. `TransferFactory_Transfer` is controlled by `transfer.sender`, and that sender is the signatory of the replacement. `transfer.sender` and `transfer.receiver` are parties, and the receiver is the receiver party above. The same context key carries the contract id. When the issuer and the holder are different parties, the extension uses the V2 transfer.
+
+The preparing app asks Scan for the choice context of this transfer. Scan's token-standard handler selects the `AnsRules` factory for a transfer to this receiver party. The app sets `cip-tbd/credential-id` on the context it submits.
+
+The factory burns the transferred CC, archives the record named by `cip-tbd/credential-id`, and creates the replacement. A credential issuance app prepares the transfer for the holder and the issuer.
 
 ### DSO Credential Registry Limits
 
@@ -273,7 +281,7 @@ The APIs are implemented as follows:
 3. The Scan app proxy served by the validator app implements the [openapi/credential-registry-v1.yaml](https://github.com/hyperledger-labs/splice/pull/3416/changes#diff-a73145dfdb26770f01b5fc0a9f35c7c34f067584acb6ec16de7e82040df6f835), calling out to multiple Scan apps and comparing the results to implement BFT reads.
 4. The SV app is extended with automation ensuring that there is exactly one `AnsCredentialRecord` self-published by the `dso` party, which announces the URLs of the Scan apps serving the off-ledger APIs of the DSO Credential Registry.
 
-A generic Token Standard V1 send can set the receiver and a memo, and still cannot set `extraArgs.context`. Wallets that can only set those two fields go through the credential issuer's dApp, which prepares the transaction. Extending a credential is a Token Standard V2 transfer on `AnsRules`: the caller supplies the existing contract id, and both the holder and the issuer authorize the transfer.
+A generic Token Standard V1 send can set the receiver and a memo, and still cannot set `extraArgs.context`. Wallets that can only set those two fields go through the credential issuer's dApp, which prepares the transaction. Extending a credential is a transfer on the `TransferFactory` of `AnsRules`. The preparing app supplies the existing contract id. The holder and the issuer both authorize the replacement when they are different parties.
 
 ## Standardized Application and Metadata Discovery
 
@@ -303,7 +311,7 @@ We expect future CIPs to define additional well-known properties for discovering
 The above properties will be used to make the DSO Credential Registry discoverable by making the `dso` party publish a credential with issuer = holder = admin = `dso` and claim
 
 ```text
-(property="cip-TBD/credential-registry-urls",
+(property="cip-TBD/credential-registry-urls", subject="<dso>",
  value="<scan-url1>/credential-registry/v1/,...,<scan-urlN>/credential-registry/v1/")
 ```
 
