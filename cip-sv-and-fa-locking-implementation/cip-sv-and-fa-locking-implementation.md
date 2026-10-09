@@ -1138,19 +1138,6 @@ The same concern applies to unlocking, which requires passing in the timepoint a
 
 The second constraint is required to avoid a corner case where the last controller passes in a timepoint that is very far in the future.
 
-### Compatibility Mode Details
-
-#### Determining Time Parameters
-
-As explained in the [prior section](https://lists.sync.global/g/cip-discuss/message/743), unlocking and withdrawal require extra time parameters. In compatibility mode, these timepoints may not be provided via extra metadata and the implementation must determine them on its own.
-
-For transaction submission workflows that require human interaction (e.g., due to a four-eye principle), the Daml workflows should generally aim to support a 24h prepare-submission delay. We propose to use the following approach to get close to supporting that delay for unlocking and withdrawing locks in compatibility mode:
-
-1. **Allow setting these timepoints via metadata:** users with wallets that support generic metadata can thereby set these timepoints appropriately for their expected prepare-submission delay.
-2. **Heuristically determine these timepoints using a 24h quantization:** if no metadata is set, then use the `Transfer.requestedAt` field ([code](https://github.com/canton-network/splice/blob/ce85b796223b92267877a79a76ab6bb3b5a9949a/token-standard/splice-api-token-transfer-instruction-v1/daml/Splice/Api/Token/TransferInstructionV1.daml#L22)) as the basis to scan forward in time in 24h increments to find the latest timepoint in the past and the first timepoint in the future.
-
-The heuristic makes use of `isLedgerTimeGE : Time -> Update Bool` ([docs](https://docs.canton.network/appdev/modules/m3-working-with-time#how-to-implement-time-constraints)). The effect is that the first multiple of 24h after `Transfer.requestedAt` becomes the upper bound for the submission time of the prepared transaction. Thus in unlucky cases such a transaction may expire quickly, but an immediate retry of its preparation will result in a transaction that is valid for close to 24h.
-
 ### Wallet Integration Concerns
 
 #### Holding Display and Selection
@@ -1218,6 +1205,7 @@ This CIP is licensed under CC0-1.0: Creative Commons CC0 1.0 Universal.
   * removed support for app-specific lock metadata
   * remove explicit top-up operations in favor of the simpler and more general automatic lock merging
   * refactored compatibility mode to support transfers and substitutions of owner-controlled locks
+  * require passing explicit time parameters in compatibility mode and remove the heuristic to determine them
   * adjust incremental delivery plan to deliver transfers and substitutions as part of Increment 1
 
 * Oct 7, 2026:
