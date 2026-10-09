@@ -1077,7 +1077,9 @@ Note that the permanent deadline that is still in the future is removed.
 However the permanent deadline that is already in the past remains effective,
 and the `ExampleSV` thus permanently only earns 60% of their SV weight.
 
-## Incremental Delivery Plan
+## Delivery Plan and Migration Plans
+
+### Incremental Delivery Plan
 
 We propose an incremental delivery that focuses first on on-chain enforcement of locks and their vesting schedules,
 and then on reducing the operational overhead for managing them.
@@ -1100,14 +1102,15 @@ Concretely, we propose the following increments of the features specified in the
    SV lifetime rewards are tracked on chain and used to detect SV underlocks.
    SV nodes run automation that enforces both temporary and permanent weight changes on-chain until the SV lock-up requirement terminates.
 
-
 ### Migration to On-Chain Enforcement of SV Locks
 
-Analogous to the incremental delivery, we propose to incrementally move the enforcement of SV locks on-chain:
+We propose to incrementally move the enforcement of SV locks on-chain:
 
-1. **Require on-chain SV locks:** once the compatibility mode for SV locks is live on MainNet, the dashboards used by the foundation to determine total SV lock amounts are adjusted to distinguish on-chain locked CC and custodially locked CC. Once that is in place, the SVs are given 30 days to transition their SV locks to consist solely of on-chain locked CC. They use their TSv1 wallets to do so.
-2. **Relieve SVs of manual top-ups and improve tax efficiency:** once “SV lock top-up automation” is delivered, SVs can adjust their configuration of beneficiaries and SV reward minting to automatically mint the required amount of SV rewards in locked form.
-3. **Relieve foundation of SV lock weight enforcement:** once “Automatic enforcement of SV underlocking” is delivered to MainNet, the foundation enables this in three steps:
+1. **Wait for Increment 1 to go live on MainNet:** this is required for SVs to effectively manage on-chain SV locks.
+2. **Adjust foundation dashboards to include on-chain locks:** as soon as Increment 1 is live on DevNet, the foundation adjusts their dashboards to track both on-chain locked CC and good-faith locked CC for SV locks.
+3. **Require on-chain SV locks after 30 days:** once Increment 1 is live on MainNet, the SV locks must be transitioned to on-chain locks within 30 days. They use their TSv1 wallets to do so.
+4. **Relieve SVs of manual top-ups and improve tax efficiency:** once “SV lock top-up automation” is delivered, SVs can adjust their configuration of beneficiaries and SV reward minting to automatically mint the required amount of SV rewards in locked form.
+5. **Relieve foundation of SV lock weight enforcement:** once “Automatic enforcement of SV underlocking” is delivered to MainNet, the foundation enables this in three steps:
    1. They create an SV vote to activate the on-chain enforcement of SV underlocking.
    2. Once that is activated at time `t`, they use their dashboards to determine the lifetime SV rewards up to time `t` and reflect that on-chain by creating corresponding SV votes.
    3. Once all lifetime rewards have been reflected on-ledger, the foundation can stop monitoring and enforcing SV underlocks via manual SV votes.
@@ -1116,12 +1119,12 @@ Note that in Step 1, the SVs can create and manage their locks using any TSv1 wa
 
 ### Migration to On-Chain Enforcement of FA Locks
 
-Analogous to the incremental delivery, we propose to incrementally move the enforcement of FA locks on-chain:
+We propose to incrementally move the enforcement of FA locks on-chain:
 
-1. **Require on-chain FA locks:** the foundation switches their dashboards to also incorporate on-chain FA locks in the total locked amounts. Once the feature set of FA locks on MainNet is sufficient for staking apps to transition their funds, the FA operators and staking apps are given 30 days to transition their FA locks to on-chain locks.
-2. **Relieve foundation of FA lock enforcement:** once “Automatic enforcement of FA underlocking” goes live on MainNet the foundation can stop monitoring and enforcing FA underlocks via manual SV votes.
-
-We propose that the feature set considered for Step 1 consists of the FA lock compatibility mode and support for custom controllers.
+1. **Wait for Increments 1-3 to go live on MainNet**: these are required for FA operators and staking apps to effectively manage on-chain FA locks.
+2. **Adjust foundation dashboards to include on-chain locks:** concurrently with the development of Increments 2 and 3, the foundation adjusts their dashboards to track both on-chain locked CC and good-faith locked CC for FA locks.
+3. **Require on-chain FA locks after 30 days:** once increments 1-3 are live on MainNet, the FA locks must be transitioned to on-chain locks within 30 days.
+4. **Relieve foundation of FA lock enforcement:** once “Automatic enforcement of FA underlocking” goes live on MainNet the foundation can stop monitoring and enforcing FA underlocks via manual SV votes.
 
 ## Technical Specification
 
@@ -1207,6 +1210,7 @@ This CIP is licensed under CC0-1.0: Creative Commons CC0 1.0 Universal.
   * refactored compatibility mode to support transfers and substitutions of owner-controlled locks
   * require passing explicit time parameters in compatibility mode and remove the heuristic to determine them
   * adjust incremental delivery plan to deliver transfers and substitutions as part of Increment 1
+  * clarify SV and FA locking migration plans wrt their delivery dependencies
 
 * Oct 7, 2026:
 
