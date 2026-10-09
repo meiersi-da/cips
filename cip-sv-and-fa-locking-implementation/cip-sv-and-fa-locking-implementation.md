@@ -12,11 +12,14 @@ License: CC0-1.0
 
 This CIP serves to align the stakeholders of [CIP-0105](../cip-0105/cip-0105.md) (SV Locking) and [CIP-0116](../cip-0116/cip-0116.md) (FA Locking) on the implementation of on-chain enforcement of SV and FA locking. It is motivated by the fact that the concrete mechanisms chosen to implement locking have a material impact on the operability of SVs, FAs, and staking apps.
 
-The proposed implementation closely follows the high-level guidance laid out by these two CIPs except for the following three minor changes:
+The proposed implementation closely follows the high-level guidance laid out by these two CIPs except for the following changes:
 
 1. Add a grace period for underlocked FA rights during which they are only temporarily suspended. The grace period defaults to seven days and can be changed by SV voting. It serves to reduce the trust that FA operators need to have in their lock owners; and thus increases the expected total amount locked by FA locks.
-2. Require locks to lock a minimum amount to avoid “dust” locks whose management overhead surpasses their value. The minimum lock amount defaults to 10k CC and can be changed by SV voting.
-3. Support configurable controllers for unlocking, substitution and withdrawing vested funds to simplify building staking apps.
+2. Clarify that the termination of the SV lock-up requirement stops the enforcement of the lock-up, but SV lock funds are released via vesting to avoid a price-shock.
+3. Drop the seven day grace period for the enforcement of temporary loss of SV weight
+   because that grace period is not economically motivated, but was added to lower the operational overhead of manual enforcement via SV votes.
+4. Require locks to lock a minimum amount to avoid “dust” locks whose management overhead surpasses their value. The minimum lock amount defaults to 10k CC and can be changed by SV voting.
+5. Support configurable controllers for unlocking, substitution and withdrawing vested funds to simplify building staking apps.
 
 The CIP further clarifies the technical integration between wallets and locks; and it proposes incremental delivery and migration paths, thereby creating clarity for the work required from the stakeholders to land on-chain enforcement of SV and FA locks on MainNet.
 
@@ -915,28 +918,34 @@ We expect SVs with a single beneficiary party to run this minting automation wit
 
 SVs with multiple beneficiaries have two kinds of options for how to automate the locking of newly minted SV rewards. They can either configure their beneficiaries such that there's a single beneficiary that locks all their required SV rewards, or they can ask each beneficiary to lock the required percentage.
 
-### Termination of the SV Lock-Up Requirement
-
-[CIP-0105](../cip-0105/cip-0105.md#5-sv-locking-and-sv-weight-schedule) requires that “The Lock-up requirement will automatically terminate 30 days after the date of next step down in rewards/halving currently forecast to occur late summer 2029.” We propose to implement that as follows:
-
-1. Add a new configuration parameter `svLockingDeactivatesAfter : RelTime` configurable by SV voting. This time is measured relative to the opening of the very first round of the network. Its default value is 5 years and 30 days, as the next halving happens 5 years after network start (see the [Minting Curve in the Canton Coin whitepaper](https://www.canton.network/hubfs/Canton%20Network%20Files/Documents%20\(whitepapers%2C%20etc...\)/Canton%20Coin_%20A%20Canton-Network-native%20payment%20application.pdf)).
-2. Change the unlock and withdrawal operations for SV locks such that they unlock the full amount of funds after that timepoint.
-
 ### Automatic Enforcement of SV Underlocking
 
-We propose to add SV node automation that automatically enforces the temporary and permanent loss of SV weight per the rules defined in [CIP-0105](../cip-0105/cip-0105.md#6-under-locked-sv-weight-enforcement). The implementation requires building on the proposal from IntellectEU to move [SV weight management fully on-ledger](https://docs.google.com/document/d/1L1cM3m8_8R7x7Vr6vTolwDgS9x2pyFQsaG1gGci3lLE/edit?tab=t.0#heading=h.j1o9vy5fqmrz). The implementation further requires:
+We propose to add SV node automation that automatically enforces the temporary and permanent loss of SV weight per the rules defined in [CIP-0105](../cip-0105/cip-0105.md#6-under-locked-sv-weight-enforcement)
+with the one modification that the temporary loss of SV weight is immediately enforced upon detection.
+The implementation depends on the implementation of the [CIP proposal to move SV weight management fully on-ledger](
+ https://github.com/canton-foundation/cips/pull/273) proposed by IntellectEU
+ ([design doc](https://docs.google.com/document/d/1L1cM3m8_8R7x7Vr6vTolwDgS9x2pyFQsaG1gGci3lLE/edit?tab=t.0#heading=h.j1o9vy5fqmrz)).
+ The implementation further requires:
 
-1. **adding new configuration parameters:** for the weight schedule, the activation time of on-chain enforcement of SV locking, and the grace periods for temporary and permanent loss of SV weight. They can all be changed by SV voting.
+1. **adding new configuration parameters:** for the weight schedule, the activation of on-chain enforcement of SV locking, the termination time of the SV lock-up requirement, and the grace period for permanent loss of SV weight. They can all be changed by SV voting.
 2. **tracking of newly minted SV rewards on-chain:** once the activation time of on-chain SV locking enforcement is past, minting SV rewards creates SV-mint-receipt contracts that are used by the SV node automation to track changes to an SV's lifetime rewards. They are created both for normal SV rewards and milestone rewards. These contracts are automatically merged by SV automation to keep their number constant.
 3. **storing historic SV reward totals on-chain:** for every SV rights owner the total lifetime rewards earned prior to activating on-chain SV locking enforcement are stored on-chain. These values are set using SV voting.
-4. **on-chain enforcement of underlocks:** extend per-SV state to track underlock events and their grace periods, so that both temporary and permanent weight losses are respected when creating SV reward coupons. As shown in [Example 3 of CIP-0105](../cip-0105/cip-0105.md#6-under-locked-sv-weight-enforcement), recovery from underlocks is immediate as soon as an SV qualifies for a higher tier.
+4. **on-chain enforcement of underlocks:** extend per-SV state to track underlock events and their permanent-loss deadlines. Reward coupon creation immediately used the adjusted weight. The loss of weight becomes permanent if not recoevered within the grace period.
 5. **off-chain automation to detect and enforce underlocks:** extend the SV node automation to reconcile at least once per round each SV’s on-chain weight adjustment against the weight adjustment warranted based on the weight schedule, the total locked amounts, and their lifetime rewards.
+6. **automatic termination of SV lock-up requirement:**
+   the termination of the SV lock-up requirement is measured against the `OpeningMiningRound.issuingFor` parameter,
+   which determines the timepoint on the issuance curve for the round.
+   By default the termination time of the SV lock-up requirement is set to 5 years and 30 days,
+   which corresponds to 30 days after the next halving as [specified in CIP-0105](../cip-0105/cip-0105.md#5-sv-locking-and-sv-weight-schedule).
+   Once it is reached the SV node automation stops enforcing SV underlocks.
+   Holding SV locks is thus no longer required and
+   they can be unlocked by their funds owners to start accessing their funds according to the vesting schedule.
 
 The bulk of this implementation consists of complex, but purely technical changes to SV node automation, the Daml code for DSO governance, and the Daml code for SV reward coupon creation and minting. From a business-level perspective, the key aspect is how the grace periods work, which we illustrate in the examples below.
 
 #### SV Right Owner to SV Node Operator Relationship
 
-Automated enforcement relies on the [change to move SV weight management on-chain](https://docs.google.com/document/d/1L1cM3m8_8R7x7Vr6vTolwDgS9x2pyFQsaG1gGci3lLE/edit?tab=t.0#heading=h.j1o9vy5fqmrz). That change introduces an on-chain representation of all SV rights, which records both the SV weight for a given SV right, and the SV node operator hosting the right and driving SV reward coupon creation for it.
+Recall that Automated enforcement depends on the [change to move SV weight management on-chain](https://docs.google.com/document/d/1L1cM3m8_8R7x7Vr6vTolwDgS9x2pyFQsaG1gGci3lLE/edit?tab=t.0#heading=h.j1o9vy5fqmrz). That change introduces an on-chain representation of all SV rights, which records both the SV weight for a given SV right, and the SV node operator hosting the right and driving SV reward coupon creation for it.
 
 Note that there’s the following [special stipulation in CIP-0105](../cip-0105/cip-0105.md#4-sv-locking-requirement):
 
@@ -967,7 +976,6 @@ Assume that the next open round is `r` and the SV node hosting `ExampleSV` trigg
   * SV beneficiaries: `100%` for `A`
   * weight: 10
   * lifetime rewards before on-chain enforcement: 0 CC
-  * last round collected: `r`
 * SV Reward Coupon:
   * round: `r`
   * weight: `10`
@@ -988,13 +996,14 @@ The SV node automations include the mint receipt in their computation of lifetim
   * SV beneficiaries: `100%` for `A`
   * weight: 10
   * lifetime rewards before on-chain enforcement: 0 CC
-  * last round collected: `r`
-  * temporary adjustment schedule: `0%` after `t1 + 7 days`
+  * temporary adjustment: `0%`
   * permanent adjustment schedule: `0%` after `t1 + 30 days`
 
-The adjustment schedules store the deadlines after which the reward weight used for coupon creation is adjusted to X% of the full weight. Coupon creation always uses the smallest temporary or permanent adjustment that is in effect.
+The permanent adjustment schedule stores the deadlines after which the reward weight used for coupon creation is permanently adjusted to X% of the full weight.
+The temporary adjustment has no associated schedule, as it is effective immediately.
+Coupon creation always uses the smallest adjustment that is in effect.
 
-Seven days later, the temporary 0% adjustment comes into effect and the SV reward coupons stop being created for `ExampleSV`. The owners of `ExampleSV` realize they need to lock funds to continue earning rewards. They organize funding and lock the minimum lock amount of 10k CC for their SV, which results in:
+In the next round, the temporary 0% adjustment is in effect and the SV reward coupons stop being created for `ExampleSV`. The owners of `ExampleSV` realize they need to lock funds to continue earning rewards. They organize funding and lock the minimum lock amount of 10k CC for their SV, which results in:
 
 * SV Lock:
   * lock owner: `A`
@@ -1008,8 +1017,7 @@ The SV node automations detect that `ExampleSV` qualifies for Tier 1, and update
   * SV beneficiaries: `100%` for `A`
   * weight: 10
   * lifetime rewards before on-chain enforcement: 0 CC
-  * last round collected: `r + 7 * 24 * 6`
-  * temporary adjustment schedule: none
+  * temporary adjustment: none
   * permanent adjustment schedule: none
 
 Thus the reward adjustment schedules are cleared and `ExampleSV` starts earning full rewards again.
@@ -1031,7 +1039,7 @@ After the underlock is enforced by SV automation at `t1`, their reward state is:
   * SV beneficiaries: `100%` for `A`
   * weight: 10
   * lifetime rewards before on-chain enforcement: 1M CC
-  * temporary adjustment schedule: `0%` after `t1 + 7 days`
+  * temporary adjustment: `0%`
   * permanent adjustment schedule: `0%` after `t1 + 30 days`
 
 Assume that at `t1 + 10 days`, they lock 450k CC, i.e., they qualify for Tier 2 that earns 60% of the weight. After the SV automation runs, the new on-chain state is:
@@ -1045,10 +1053,11 @@ Assume that at `t1 + 10 days`, they lock 450k CC, i.e., they qualify for Tier 2 
   * SV beneficiaries: `100%` for `A`
   * weight: 10
   * lifetime rewards before on-chain enforcement: 1M CC
-  * temporary adjustment schedule: `60%` after `t1 + 7 days`
+  * temporary adjustment: `60%`
   * permanent adjustment schedule: `60%` after `t1 + 30 days`
 
-Note that neither of the two deadlines are fully reset, as `ExampleSV` was underlocked at Tier 2 already since `t1`. Thus the temporary 60% adjustment to their rewards applies and they only earn 60% of their weight. Note that both 0% underlock deadlines were removed, which reflects that recovery is immediate upon locking funds that qualify an SV for a higher tier.
+Note that the permanent adjustment schedule is not fully reset, as `ExampleSV` was underlocked at Tier 2 already since `t1`. Thus the temporary 60% adjustment to their rewards applies and they only earn 60% of their weight.
+Note that the 0% underlock deadline was removed, which reflects that recovery is immediate upon locking funds that qualify an SV for a higher tier.
 
 Assume that at `t1 + 20 days`, they unlock 100k CC, which implies that a lock of 350k CC remains. They thus only qualify for Tier 3 that earns 40% of their weight. The resulting reward state is:
 
@@ -1057,41 +1066,53 @@ Assume that at `t1 + 20 days`, they unlock 100k CC, which implies that a lock of
   * SV beneficiaries: `100%` for `A`
   * weight: 10
   * lifetime rewards before on-chain enforcement: 1M CC
-  * temporary adjustment schedule:
-    * `60%` after `t1 + 7 days`
-    * `40%` after `t1 + 20 + 7 days`
+  * temporary adjustment: `40%`
   * permanent adjustment schedule:
     * `60%` after `t1 + 30 days`
     * `40%` after `t1 + 20 + 30 days`
 
-Note that the 40% underlock deadlines start at `t1 + 20` days, which is 20 days later than the 60% underlock deadlines. This reflects that the locking at 60% recovered the 0% underlock, even though it happened less than 30 days ago.
+Note that the 40% underlock deadlines start at `t1 + 20` days, which is 20 days later than the 60% underlock deadlines.
+This reflects that the locking at 60% recovered the 0% underlock, even though it happened less than 30 days ago.
 
-After `t1 + 30 days`, the 60% weight reduction becomes permanent. We can see this by looking at the example where `ExampleSV` increases their locks to 700k CC and would thus in principle qualify to earn 100% of their rewards. Their new reward state becomes:
+After `t1 + 30 days`, the 60% weight reduction becomes permanent.
+We can see this by looking at the example where `ExampleSV` increases their locks to 700k CC and would thus in principle qualify to earn 100% of their rewards. Their new reward state becomes:
 
 * SV Reward State:
   * SV name: `ExampleSV`
   * beneficiaries: `100%` for `A`
   * weight: 10
   * lifetime rewards before on-chain enforcement: 1M CC
-  * temporary adjustment schedule: none
+  * temporary adjustment: none
   * permanent adjustment schedule:
     * `60%` after `t1 + 30 days`
 
-Note that both the temporary adjustment deadlines and the permanent deadline that is still in the future are removed. However the permanent deadline that is already in the past remains effective, and the `ExampleSV` thus permanently only earns 60% of their SV weight.
+Note that the permanent deadline that is still in the future is removed.
+However the permanent deadline that is already in the past remains effective,
+and the `ExampleSV` thus permanently only earns 60% of their SV weight.
 
 ## Incremental Delivery Plan
 
-We propose an incremental delivery that focuses first on on-chain enforcement of locks and then on improving the UX for maintaining these locks. Concretely, we propose the following increments of the features specified in the [High-Level Specification](#high-level-specification):
+We propose an incremental delivery that focuses first on on-chain enforcement of locks and their vesting schedules,
+and then on reducing the operational overhead for managing them.
+Concretely, we propose the following increments of the features specified in the [High-Level Specification](#high-level-specification):
 
-1. **Compatibility mode for SV locks:** implement the compatibility mode based on the TSv1 APIs for creating SV locks. Locks must always lock an SV determined minimal amount of CC.
-2. **Compatibility mode for FA locks:** implement the compatibility mode based on the TSv1 APIs for creating (provisional) FA locks; and add SV automation to convert provisional into full FA locks once the corresponding featured app right is created.
-3. **Basic SV and FA locks and non-default controllers:** support creating and interacting with SV and (provisional) FA locks, including custom controllers for unlocking, substitution and withdrawal.
-4. **Substitution and transfers for SV and FA locks:** support proposing substitutions and transfers of (vesting) SV and FA locks as described in the section on [Substitution](#substitution) and [Transfers](#transfers).
-5. **Topups and Merges for SV and FA locks:** support topups and merges, including minting SV rewards directly in locked form into an existing SV lock.
-6. **Automatic enforcement of FA underlocking:** FA underlocks are tracked and automatically enforced after a seven day grace period.
-7. **SV lock top-up automation:** extend the minting automation of validator nodes to mint a target percentage of SV rewards in locked form.
-8. **Termination of SV lock-up requirements:** allow SVs to vote on terminating the SV lock-up requirement upon which all funds can be fully withdrawn without any vesting from both SV locks and vesting SV locks.
-9. **Automatic enforcement of SV underlocking:** SV lifetime rewards are tracked on chain and used to detect SV underlocks. SV nodes run automation that enforces both temporary and permanent weight changes on-chain.
+1. **Compatibility mode for SV and FA locks:**
+   implement all operations of the [compatibility mode](#compatibility-mode) for managing SV and FA locks using the TSv1 APIs.
+   Locks must always lock an SV determined minimal amount of CC.
+2. **Provisional FA locks:**
+   implement support for provisional FA locks;
+   and add SV automation to convert provisional into full FA locks once the corresponding featured app right is created.
+3. **Support custom controllers:**
+   allow creating SV and FA locks with custom controllers; and add
+   an API for wallets and staking apps to support all operations on such locks.
+4. **Automatic enforcement of FA underlocking:** FA underlocks are tracked and automatically enforced after a seven day grace period.
+5. **SV lock top-up automation:**
+   allow minting SV rewards directly in locked form into an existing SV lock; and
+   extend the minting automation of validator nodes to make use of that.
+6. **Automatic enforcement of SV underlocking:**
+   SV lifetime rewards are tracked on chain and used to detect SV underlocks.
+   SV nodes run automation that enforces both temporary and permanent weight changes on-chain until the SV lock-up requirement terminates.
+
 
 ### Migration to On-Chain Enforcement of SV Locks
 
@@ -1113,7 +1134,7 @@ Analogous to the incremental delivery, we propose to incrementally move the enfo
 1. **Require on-chain FA locks:** the foundation switches their dashboards to also incorporate on-chain FA locks in the total locked amounts. Once the feature set of FA locks on MainNet is sufficient for staking apps to transition their funds, the FA operators and staking apps are given 30 days to transition their FA locks to on-chain locks.
 2. **Relieve foundation of FA lock enforcement:** once “Automatic enforcement of FA underlocking” goes live on MainNet the foundation can stop monitoring and enforcing FA underlocks via manual SV votes.
 
-We propose that the feature set considered for Increment 1 consists of the FA lock compatibility mode, basic FA locks with custom controllers,  substitutions, and transfers. We propose that topups and merges of FA locks are not a strict requirement, but should be delivered soon thereafter.
+We propose that the feature set considered for Step 1 consists of the FA lock compatibility mode and support for custom controllers.
 
 ## Technical Specification
 
@@ -1164,14 +1185,11 @@ This CIP serves to align the stakeholders of [CIP-0105](../cip-0105/cip-0105.md)
 The business rationale for SV and FA locking and their vesting and underlock enforcement was already given as part of [CIP-0105](../cip-0105/cip-0105.md) and [CIP-0116](../cip-0116/cip-0116.md). Where we had to make design choices for this CIP, we optimized for the following priorities:
 
 1. Transition to on-chain SV and FA locks as quickly as possible.
-2. Maximize the total value locked on-chain.
-3. Enable credit markets for SV and FA locks (e.g., staking apps) to be built.
-4. Minimize the confusion of users using wallets to interact with locks.
-5. Minimize the delivery cost of the implementation.
+2. Enable credit markets for SV and FA locks (e.g., staking apps) to be built.
+3. Minimize the confusion of users using wallets to interact with locks.
+4. Minimize the delivery cost of the implementation.
 
-Note that Priority 3 is implied by Priority 2, as a well-functioning credit market makes it easier for FAs and SVs to fund their locking requirements. We call it out separately as it was a key priority in the design.
-
-### Alternatives Considered
+## Alternatives Considered
 
 The above priorities also reflect in the following alternatives that we considered and rejected for particular implementation choices.
 
@@ -1189,10 +1207,13 @@ The above priorities also reflect in the following alternatives that we consider
 * **No grace period for permanent removal of underlocked FA rights:** CIP-0116 stipulates that “If locking falls below required thresholds, Featured App status is immediately removed.” Enforcing this strictly would imply that a single operational mistake on a single FA lock would make an FA provider lose their FA status and force them to go through the manual process of reapplying for it. We consider this unnecessary operational overhead, which is why this CIP proposes to immediately suspend the FA status on underlocking, but only permanently revoke it after a grace period.
 * **Switch SV reward minting flows to TBAR:** there were initial considerations of switching SV rewards minting to use the same off-ledger computations as the ones used for traffic-based app rewards. This would allow for slightly less delayed underlock enforcement, as it could be computed exactly as of round start instead of being delayed by about 30s. However the implementation effort for doing this switch is significantly higher than the one for adapting the existing SV reward minting flow.
 * **No minimum lock amount:** the minimum lock amount requirement does complicate the operations of staking apps and it would be great to not have it. However without a minimum lock amount there’s a risk that staking apps do produce lots of small locks. A situation that’s similar to how some wallets used to produce lots of “dust” CC holdings, e.g., as part of marketing campaigns. Every lock does consume resources on SV nodes. A minimum lock amount avoids having to spend delivery resources on scalability problems resulting from “dust locks”.
+* **Unvested release of funds upon termination of the SV lock-up requirement:**
+  we considered releasing the funds in (vesting) SV locks immediately upon termination of the SV lock-up requirement.
+  We decided against this approach, as it would lead to an immediate increase of available funds, which may cause a price-shock.
 
 # Reference Implementation
 
-The reference implementation for the Daml code is currently (Aug 28, 2026) being built as a stack of PRs on this Splice feature fork:
+The reference implementation for the Daml code is currently (Oct 9, 2026) being built as a stack of PRs on this Splice feature fork:
 
 * [https://github.com/canton-network/splice-sv-fa-locking/pulls](https://github.com/canton-network/splice-sv-fa-locking/pulls)
 
@@ -1207,6 +1228,8 @@ This CIP is licensed under CC0-1.0: Creative Commons CC0 1.0 Universal.
 
 * Oct 9, 2026:
   * removed support for app-specific lock metadata
+  * simplify termination of SV lock-up by just stopping enforcement
+  * remove grace period for temporary loss of SV weight
 
 * Oct 8, 2026:
   * refactored compatibility mode to support transfers and substitutions of owner-controlled locks without app-specific lock metadata
@@ -1219,11 +1242,12 @@ This CIP is licensed under CC0-1.0: Creative Commons CC0 1.0 Universal.
   * specify that substitution and transfer proposals expire after 90 days
   * make CIP independent of whether TSv2 is the API used for full feature integrations
 
-* Aug 28, 2026: Initial draft created.
-
 * Sep 3, 2026: Incorporated review feedback:
 
   * automate termination of SV lock-up period
   * aggregate SV weight across multiple nodes operated by the same SV
   * change "withdrawal controllers" to vesting controllers
   * switch to specifying substitution targets by key instead of by contract-id.
+
+* Aug 28, 2026: Initial draft created.
+
