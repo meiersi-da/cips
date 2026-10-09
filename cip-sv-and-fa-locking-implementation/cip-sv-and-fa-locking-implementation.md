@@ -95,6 +95,16 @@ All controllers are made observers of the lock contract, so they can monitor its
 
 The controllers can provide their authorization for an action individually one after the other in their own Daml transaction; or jointly in a single transaction. The former is useful when the controllers are each using their own wallet to authorize an action. They do so by executing the action they want to confirm, which only happens once a sufficient set of controllers have authorized it. Joint authorization in a single transaction is useful when their authorization is managed via a third-party app.
 
+##### Automatic Lock Merging
+
+Locks are identifed by their key, which consists of the lock owner, the lock subject, the lock type, the custom controllers.
+When a new lock is created with the same key as an existing lock its amount is automatically merged into the existing one.
+This can for example be used to topup an existing lock.
+
+Lock merging is performed on a best effort basis.
+Concurrent lock creations may result in separate locks with the same key being created.
+Furthermore the automatic merging will merge at most 20 locks with the same key to avoid overly large transactions.
+
 ##### Example: Creating an FA Lock
 
 The following FA lock is an example of a lock that a staking app `S` might create:
@@ -113,6 +123,31 @@ The substitution controllers and the unlock controllers are the same. They are c
 
 The vesting controllers control the disbursal of vesting funds, which can happen via withdrawals, substitutions, or transfers.
 In this example, they are chosen such that `S` can automate the withdrawal or substitution of vested funds on behalf of `A` without an extra delegation contract, but `A` can also drive substitutions and withdrawals themselves.
+
+##### Example: Automatic Lock Merging
+
+Suppose `A` creates another FA lock like the one from the previous example, but with a lock amount of 1k CC.
+The new lock is automatically merged with the existing one, resulting in this one lock:
+
+* FA lock with
+  * lock owner: `A`
+  * lock subject: `X`
+  * amount: 5,001,000 CC
+  * substitution controllers: `{S, X} | {S, A} | {A, X}`
+  * unlock controllers: `{S, X} | {S, A} | {A, X}`
+  * vesting controllers: `{S} | {A}`
+
+Suppose `A` then additionally creates the following FA lock:
+
+* FA lock with
+  * lock owner: `A`
+  * lock subject: `X`
+  * amount: 1M CC
+  * substitution controllers: `{S, A}`
+  * unlock controllers: `{S, A}`
+  * vesting controllers: `{S} | {A}`
+
+This lock is not merged with the previous one because its has different substitution and unlock controllers.
 
 #### Unlocking
 
@@ -192,7 +227,7 @@ Funds owners can create a proposal to use their funds to substitute some (or all
 
 A substitution generally results in two locks of the same type with the same lock subject whose total amount is equal to the amount of the existing lock. The substituted funds in the existing lock are released as liquid CC to the lock owner of the existing lock. Locks whose locked amount would be zero are not created.
 
-In the spirit of maximizing operational flexibility, a special provision is made for substitutions proposed by the owner of the targeted existing lock. Such a proposal does not lock any funds. Instead the funding of the resulting new locks is provided by splitting the funds of the existing lock. This allows lock owners to update the lock controllers without requiring any extra liquidity. As for normal substitutions, the substitution controllers on the existing lock must approve the substitution for it to succeed. Note that adding extra funds to an existing lock is not possible using substitutions. For that [topups](#topups-merges-and-minting-locked-sv-rewards) should be used.
+In the spirit of maximizing operational flexibility, a special provision is made for substitutions proposed by the owner of the targeted existing lock. Such a proposal does not lock any funds. Instead the funding of the resulting new locks is provided by splitting the funds of the existing lock. This allows lock owners to update the lock controllers without requiring any extra liquidity. As for normal substitutions, the substitution controllers on the existing lock must approve the substitution for it to succeed.
 
 Minimum lock amounts are enforced on all locks resulting from partial substitutions. Lock owners are encouraged to lock amounts that are multiples of the minimum lock amount to avoid failed partial substitutions.
 
@@ -200,10 +235,10 @@ Substitution proposals expire after 90 days to prevent indefinite pending substi
 
 ##### Substitution Target Resolution
 
-Substitution proposals specify the target lock by value. Concretely they specify type, owner, subject, controllers, and vesting state of their target lock. The amount is intentionally not included to avoid substitutions that cannot be accepted because the amount changed due to concurrent partial unlocks, partial substitutions, topups, or merges.
+Substitution proposals specify the target lock by value. Concretely they specify type, owner, subject, controllers, and vesting state of their target lock. The amount is intentionally not included to avoid substitutions that cannot be accepted because the amount changed due to concurrent partial unlocks or partial substitutions.
 
 The implementation uses contract keys to resolve this target to all locks that match the specification.
-If there are multiple locks, then it merges them first before applying the substitution to avoid failed substitutions due to insufficient amounts in individual locks.
+If there are multiple locks, then it merges up to 20 of them before applying the substitution to reduce the chance of failed substitutions due to insufficient amounts in individual locks.
 
 ##### Example: Substitution of Locked Funds
 
@@ -408,67 +443,12 @@ Once the transfer is also approved by substitution controllers of the existing l
   * amount: 2M CC
   * substitution controllers: `{S, B}`
 
-#### Topups, Merges, and Minting Locked SV Rewards
+#### Minting SV Rewards into Locks
 
-A topup allows a lock owner to deposit additional funds in an existing lock. They can do so without any extra authorization. They can fund topups using three funding sources: liquid CC, unminted SV rewards, or existing locks with the same attributes as the topup target.
-
-Using unminted SV rewards allows these to be minted directly as locked funds, which is useful in tax regimes that treat unvested and vested rewards differently. When doing so, the lock owner can specify the percentage of rewards that should be added to the locked funds, making it easy for SVs to mint and lock the percentage of their rewards matching their desired tier.
-
-Using existing locks as a funding source enables merging locks with the same attributes, which reduces the overhead of managing these locks.
-
-##### Example: Increase FA lock
-
-Assume that `A` locks 10k CC for `X` using staking app `S`, which is represented by:
-
-* FA Lock with:
-  * contract-id: `cid1`
-  * lock owner: `A`
-  * lock subject: `X`
-  * amount: 10k CC
-  * substitution controllers: `{S}`
-
-Assume that `A` would like to stake an additional 5k CC. They cannot do so by creating a new lock, as that would violate the minimum lock amount. However, they can request the following topup:
-
-* Topup with
-  * topup target: `cid1`
-  * topup amount: 5k
-
-This topup request will immediately succeed and result in:
-
-* FA Lock with:
-  * contract-id: `cid1`
-  * lock owner: `A`
-  * lock subject: `X`
-  * amount: 15k CC
-  * substitution controllers: `{S}`
-
-##### Example: Merge FA Locks
-
-Assume that `A` agreed to substitute five existing FA locks over 1M CC each for lock subject `X` using staking app `S`. They thus have five FA locks of the form:
-
-* FA Lock with:
-  * contract-id: `cid_i` for 1 <= `i` <= 5
-  * lock owner: `A`
-  * lock subject: `X`
-  * amount: 1M CC
-  * substitution controllers: `{S}`
-
-They can merge all of them into a single lock by requesting:
-
-* Topup with
-  * topup target: `cid1`
-  * lock merge inputs: `[cid2, cid3, cid4, cid5]`
-
-The result is:
-
-* FA Lock with:
-  * contract-id: `cid1`
-  * lock owner: `A`
-  * lock subject: `X`
-  * amount: 5M CC
-  * substitution controllers: `{S}`
-
-This can for example be useful to prepare for an upcoming substitution of 2.5M CC, which otherwise would have to be executed as three individual substitutions against three 1M CC locks.
+When creating a lock, SV rewards can be minted directly into the lock,
+which is useful in tax regimes that treat unvested and vested rewards differently.
+When doing so, the lock owner can specify the percentage of rewards that should be added to the locked funds.
+Thereby making it easy for SVs to mint and lock the percentage of their rewards matching their desired tier.
 
 ##### Example: Mint Locked SV Rewards
 
@@ -477,7 +457,6 @@ Assume that an SV `ExampleSV` uses party `A` to lock the required funds for thei
 Thus every round they have:
 
 * SV Lock with:
-  * contract-id: `cid1`
   * lock owner: `A`
   * lock subject: `ExampleSV`
   * amount: `<current-amount>` CC
@@ -487,17 +466,18 @@ Thus every round they have:
   * beneficiary: `A`
   * weight: `<example-weight>`
 
-The minting automation for party `A` can issue the following topup request to mint the SV reward coupon and lock 70% of the minted CC:
+The minting automation for party `A` can issue the following lock creation request to mint the SV reward coupon and lock 70% of the minted CC:
 
-* Topup with
-  * topup target: `cid1`
+* Create SV lock with:
+  * lock owner: `A`
+  * lock subject: `ExampleSV`
+  * SV reward locking percentage: `70%`
   * SV reward coupons: `[cid2]`
-  * reward locking percentage: `70%`
 
-The request will immediately succeed and result in:
+Because created locks are [auto-merged](#automatic-lock-merging),
+the existing lock will be increased by 70% of the minted CC. The result is:
 
 * SV Lock with:
-  * contract-id: `cid1`
   * lock owner: `A`
   * lock subject: `ExampleSV`
   * amount: `<current-amount> + <round r issuance per SV weight> * <example-weight> * 0.7` CC
@@ -505,9 +485,10 @@ The request will immediately succeed and result in:
 
 #### Minimum Lock Amount
 
-Similar to lot sizes in TradFi, FA and SV locks must lock a minimum amount configured by SV voting (default 10k CC). This minimum amount serves to avoid users creating “dust locks” whose management overhead exceeds their value.
+Similar to lot sizes in TradFi, locks must lock a minimum amount configured by SV voting (default 10k CC). This minimum amount serves to avoid users creating “dust locks” whose management overhead exceeds their value.
 
-The minimum amount restriction is enforced on all actions that create additional locks; e.g., when doing a partial unlock or a partial substitution both of the resulting locks must be larger than the minimum amount. Actions that archive at least one existing lock and result in a single new lock are allowed to produce locks with an amount below the minimum. For example, it is always possible to substitute or unlock the whole lock amount or to merge existing locks, even if the SVs voted to increase the minimum lock amount after the locks were created.
+The minimum amount restriction is enforced on all actions that create additional locks; e.g., when creating a new lock or when doing a partial unlock or a partial substitution both of the resulting locks must be larger than the minimum amount. Actions that archive at least one existing lock and result in a single new lock are allowed to produce locks with an amount below the minimum.
+For example, it is always possible to substitute or unlock the whole lock amount or to [topup existing locks via auto-merging](#automatic-lock-merging), even if the SVs voted to increase the minimum lock amount after the locks were created.
 
 Note that new SVs will need to lock the minimum lock amount once they are onboarded to avoid [losing their SV weight as shown in this example](#example-temporary-loss-of-reward-weight).
 
@@ -796,7 +777,7 @@ If `B` accepts this transfer instruction, the existing FA lock remains with `A` 
 The limitations of the compatibility mode are the following:
 
 1. no support for managing locks with custom controllers
-2. no support for topups, merges, and locked SV reward minting
+2. no support for locked SV reward minting
 3. the locks show as long-lived transfer offers in the wallet UI
 
 ### Automatic Enforcement of FA Underlocking
@@ -878,7 +859,7 @@ No automatic unlocking of funds happens. However `X` can unlock their remaining 
 
 ### Automated SV Reward Locking
 
-We propose to extend the reward minting automation of validator nodes to mint a percentage of SV rewards directly in locked form by [topping up an existing lock](#topups-merges-and-minting-locked-sv-rewards). Concretely, we expect validator nodes to accept a configuration as shown in the following example:
+We propose to extend the reward minting automation of validator nodes to [mint a percentage of SV rewards directly in locked form](#minting-sv-rewards-into-locks). Concretely, we expect validator nodes to accept a configuration as shown in the following example:
 
 ```textproto
 canton.validator-apps.validator_backend {
@@ -1103,7 +1084,7 @@ Concretely, we propose the following increments of the features specified in the
    implement support for provisional FA locks;
    and add SV automation to convert provisional into full FA locks once the corresponding featured app right is created.
 3. **Support custom controllers:**
-   allow creating SV and FA locks with custom controllers; and add
+   allow creating SV and FA locks with [custom controllers](#controllers-on-lock-actions); and add
    an API for wallets and staking apps to support all operations on such locks.
 4. **Automatic enforcement of FA underlocking:** FA underlocks are tracked and automatically enforced after a seven day grace period.
 5. **SV lock top-up automation:**
@@ -1202,7 +1183,6 @@ The above priorities also reflect in the following alternatives that we consider
   claiming funds from the existing owner.
   Requiring the existing owner to initiate the transfer of their funds
   removes that risk.
-* **Make topups a special case of substitutions:** from a technical perspective this would be well possible, as the arguments align well. We rejected this as these two operations are quite different in their intent, and combining them risks confusing users.
 * **Support app-specific lock metadata:** the benefits of associating application-specific metadata with locks do not justify the added complexity for specifying lock substitutions and transfers, which require specifying the metadata for both target and new locks. If a concrete need arises, this support can be added in a future change.
 * **No grace period for permanent removal of underlocked FA rights:** CIP-0116 stipulates that “If locking falls below required thresholds, Featured App status is immediately removed.” Enforcing this strictly would imply that a single operational mistake on a single FA lock would make an FA provider lose their FA status and force them to go through the manual process of reapplying for it. We consider this unnecessary operational overhead, which is why this CIP proposes to immediately suspend the FA status on underlocking, but only permanently revoke it after a grace period.
 * **Switch SV reward minting flows to TBAR:** there were initial considerations of switching SV rewards minting to use the same off-ledger computations as the ones used for traffic-based app rewards. This would allow for slightly less delayed underlock enforcement, as it could be computed exactly as of round start instead of being delayed by about 30s. However the implementation effort for doing this switch is significantly higher than the one for adapting the existing SV reward minting flow.
@@ -1230,6 +1210,7 @@ This CIP is licensed under CC0-1.0: Creative Commons CC0 1.0 Universal.
   * removed support for app-specific lock metadata
   * simplify termination of SV lock-up by just stopping enforcement
   * remove grace period for temporary loss of SV weight
+  * remove explicit top-up operations in favor of the simpler and more general automatic lock merging
 
 * Oct 8, 2026:
   * refactored compatibility mode to support transfers and substitutions of owner-controlled locks without app-specific lock metadata
