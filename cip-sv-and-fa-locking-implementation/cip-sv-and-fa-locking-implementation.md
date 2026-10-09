@@ -673,7 +673,11 @@ SVs with multiple beneficiaries have two kinds of options for how to automate th
 
 ### Automatic Enforcement of SV Underlocking
 
-We propose to add SV node automation that automatically enforces the temporary and permanent loss of SV weight per the rules defined in [CIP-0105](../cip-0105/cip-0105.md#6-under-locked-sv-weight-enforcement). The implementation requires building on the proposal from IntellectEU to move [SV weight management fully on-ledger](https://docs.google.com/document/d/1L1cM3m8_8R7x7Vr6vTolwDgS9x2pyFQsaG1gGci3lLE/edit?tab=t.0#heading=h.j1o9vy5fqmrz). The implementation further requires:
+We propose to add SV node automation that automatically enforces the temporary and permanent loss of SV weight per the rules defined in [CIP-0105](../cip-0105/cip-0105.md#6-under-locked-sv-weight-enforcement).
+The implementation depends on the implementation of the [CIP proposal to move SV weight management fully on-ledger](
+ https://github.com/canton-foundation/cips/pull/273) proposed by IntellectEU
+ ([design doc](https://docs.google.com/document/d/1L1cM3m8_8R7x7Vr6vTolwDgS9x2pyFQsaG1gGci3lLE/edit?tab=t.0#heading=h.j1o9vy5fqmrz)).
+ The implementation further requires:
 
 1. **adding new configuration parameters:** for the weight schedule, the activation of on-chain enforcement of SV locking, the termination time of the SV lock-up requirement, and the grace periods for temporary and permanent loss of SV weight. They can all be changed by SV voting.
 2. **tracking of newly minted SV rewards on-chain:** once the activation time of on-chain SV locking enforcement is past, minting SV rewards creates SV-mint-receipt contracts that are used by the SV node automation to track changes to an SV's lifetime rewards. They are created both for normal SV rewards and milestone rewards. These contracts are automatically merged by SV automation to keep their number constant.
@@ -693,7 +697,7 @@ The bulk of this implementation consists of complex, but purely technical change
 
 #### SV Right Owner to SV Node Operator Relationship
 
-Automated enforcement relies on the [change to move SV weight management on-chain](https://docs.google.com/document/d/1L1cM3m8_8R7x7Vr6vTolwDgS9x2pyFQsaG1gGci3lLE/edit?tab=t.0#heading=h.j1o9vy5fqmrz). That change introduces an on-chain representation of all SV rights, which records both the SV weight for a given SV right, and the SV node operator hosting the right and driving SV reward coupon creation for it.
+Recall that Automated enforcement depends on the [change to move SV weight management on-chain](https://docs.google.com/document/d/1L1cM3m8_8R7x7Vr6vTolwDgS9x2pyFQsaG1gGci3lLE/edit?tab=t.0#heading=h.j1o9vy5fqmrz). That change introduces an on-chain representation of all SV rights, which records both the SV weight for a given SV right, and the SV node operator hosting the right and driving SV reward coupon creation for it.
 
 Note that there’s the following [special stipulation in CIP-0105](../cip-0105/cip-0105.md#4-sv-locking-requirement):
 
