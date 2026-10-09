@@ -726,7 +726,7 @@ Transfers are initiated by the current owner of the target lock using a transfer
 * memo tag: `cip-127/memo:`
   * `request=transfer-lock&`
   * `new-lock-owner=<new-lock-owner-party-id>&`
-  * `start-transfer-before-time=<iso-8601 timestamp>&`
+  * `transfer-amount=<amount-to-transfer>&`
   * `lock-kind=<sv-lock|fa-lock|provisional-fa-lock>&`
   * `lock-subject=<sv-name|fa-party-id>&`
   * `lock-status=<locked|vesting>`
