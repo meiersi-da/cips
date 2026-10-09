@@ -60,7 +60,7 @@ Governance locks:
 Two wallet integration options are supported:
 
 1. **Full feature integration:** all workflows described in this CIP will be exposed via Daml interface APIs for staking apps and wallets to integrate with. Wallets are expected to build dedicated UIs for these workflows to build a full feature integration.
-2. **Compatibility mode:** a compatibility mode with a reduced feature set allows using any wallet that supports [CIP-56](../cip-0056/cip-0056.md) Token Standard V1 (TSv1) two-step transfers to create locks, unlock them, withdraw vested funds in daily tranches, top up and merge locks, substitute locks, and transfer locks.
+2. **Compatibility mode:** a compatibility mode with a reduced feature set allows using any wallet that supports [CIP-56](../cip-0056/cip-0056.md) Token Standard V1 (TSv1) two-step transfers to create locks, unlock them, and withdraw vested funds in daily tranches.
 
 The compatibility mode enables the initial deployment of SV and FA locks without requiring wallets to support the full-feature workflows.
 It will remain available alongside the full feature integration.
@@ -558,7 +558,7 @@ The `lock-vesting-info` field provides a human-readable summary of the vesting s
 ##### Lock Actions
 
 Actions on locks are performed by initiating a TSv1 transfer to the special `cip-127_lock-manager::1220000000000000000000000000000000000000000000000000000000000000abcd` party with a memo tag that specifies the request and its parameters.
-The supported actions are: creating locks, starting vesting, withdrawing vested funds, topping up and merging locks, substituting locks, and transferring locks.
+The supported actions are: creating locks, starting vesting, withdrawing vested funds, substituting locks, and transferring locks.
 We explain them in the following sections.
 
 ###### Creating Locks
@@ -662,46 +662,6 @@ The result is a payout of 250,000 CC to `A` and the following updated vesting lo
 * receiver: `cip-127_lock-manager::1220000000000000000000000000000000000000000000000000000000000000abcd`
 * amount: 750,000 CC
 * memo tag: `cip-127/memo:lock-kind=fa-lock&lock-subject=X&lock-status=vesting&lock-vesting-duration-micros=3888000000000&lock-vesting-end-time-micros=1898640000000000&lock-vesting-info="vesting for 45.0 days until 2030-03-02T00:00:00Z"`
-
-###### Topping Up and Merging Locks
-
-Topups are initiated by the lock owner using a single transfer request to the lock manager of the following form:
-
-* sender: `<lock-owner-party-id>`
-* receiver: `cip-127_lock-manager::1220000000000000000000000000000000000000000000000000000000000000abcd`
-* amount: `<amount-to-add>`
-* memo tag: `cip-127/memo:`
-  * `request=topup-lock&`
-  * `lock-kind=<sv-lock|fa-lock|provisional-fa-lock>&`
-  * `lock-subject=<sv-name|fa-party-id>&`
-  * `lock-status=<locked|vesting>`
-  * for vesting locks, also include
-    * `lock-vesting-duration-micros=<vesting duration in microseconds>&`
-    * `lock-vesting-end-time-micros=<vesting end time in microseconds since unix epoch>`
-
-The sender and lock parameters identify the existing owner-controlled locks to top up.
-The lock manager merges all matching locks and adds the transfer amount as liquid CC to the resulting lock, preserving its other attributes, including any vesting schedule.
-The request requires at least one matching lock and completes without a separate acceptance request or additional controller authorization.
-The amount added may be below the minimum lock amount because no additional lock is created.
-
-To merge matching locks without adding liquid CC, the lock owner uses the same request with an amount of `0.0`.
-Minting SV rewards directly into a lock is not supported in compatibility mode.
-
-*Example:* Assume party `A` owns a 10M CC SV lock for SV rights owner `ExampleSV` and satisfies a 70% locking requirement for their targeted SV reward tier.
-`A` then mints another 1M CC of SV rewards as liquid CC, increasing their lifetime balance by 1M CC.
-To maintain the targeted tier, `A` tops up the existing lock with 700k CC of these minted rewards by initiating:
-
-* sender: `A`
-* receiver: `cip-127_lock-manager::1220000000000000000000000000000000000000000000000000000000000000abcd`
-* amount: 700k CC
-* memo tag: `cip-127/memo:request=topup-lock&lock-kind=sv-lock&lock-subject=ExampleSV&lock-status=locked`
-
-The result is a 10.7M CC SV lock owned by `A` for `ExampleSV`, displayed in the wallet as a pending transfer instruction:
-
-* sender: `A`
-* receiver: `cip-127_lock-manager::1220000000000000000000000000000000000000000000000000000000000000abcd`
-* amount: 10.7M CC
-* memo tag: `cip-127/memo:lock-kind=sv-lock&lock-subject=ExampleSV&lock-status=locked`
 
 ###### Substituting Locks
 
@@ -833,7 +793,7 @@ If `B` accepts this transfer instruction, the existing FA lock remains with `A` 
 The limitations of the compatibility mode are the following:
 
 1. no support for managing locks with custom controllers
-2. no support for locked SV reward minting
+2. no support for topups, merges, and locked SV reward minting
 3. the locks show as long-lived transfer offers in the wallet UI
 
 ### Automatic Enforcement of FA Underlocking
@@ -1247,7 +1207,6 @@ This CIP is licensed under CC0-1.0: Creative Commons CC0 1.0 Universal.
 
 * Oct 9, 2026:
   * removed support for app-specific lock metadata
-  * added compatibility-mode topups and merges via a single request to the lock manager, excluding locked SV reward minting
 
 * Oct 8, 2026:
   * refactored compatibility mode to support transfers and substitutions of owner-controlled locks without app-specific lock metadata
