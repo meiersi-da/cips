@@ -251,11 +251,13 @@ Extending a credential is a transfer on the `TransferFactory` implemented by `An
 
 On Token Standard V2, `transfer.sender` is a basic account of the holder or the issuer, and `transfer.receiver` is the basic account of the receiver party. A basic account is an `Account` whose owner is that party, with no provider and an empty account id. `actors` are the holder and the issuer. When they are the same party, that party is the only actor. `transfer.amount` is the CC to burn, and it must be positive. `extraArgs.context` carries `cip-tbd/credential-id` as an `AV_ContractId` of the record being extended.
 
-On Token Standard V1, the same extension works when the issuer and the holder are the same party. `TransferFactory_Transfer` is controlled by `transfer.sender`, and that sender is the signatory of the replacement. `transfer.sender` and `transfer.receiver` are parties, and the receiver is the receiver party above. The same context key carries the contract id. When the issuer and the holder are different parties, the extension uses the V2 transfer.
+On Token Standard V1, the extension is supported only when the issuer and the holder are the same party. Archiving the record and creating its replacement requires the authority of both the issuer and the holder, as both are signatories of the record. A V1 `TransferFactory_Transfer` is controlled by `transfer.sender` alone, so it provides that authority only when the issuer and the holder are the same party. `transfer.sender` and `transfer.receiver` are parties: the sender is that party, and the receiver is the receiver party above. The same context key carries the contract id. When the issuer and the holder are different parties, the extension uses the V2 transfer with both of them as `actors`.
 
 The preparing app asks Scan for the choice context of this transfer. Scan's token-standard handler selects the `AnsRules` factory for a transfer to this receiver party. The app sets `cip-tbd/credential-id` on the context it submits.
 
 The factory burns the transferred CC, archives the record named by `cip-tbd/credential-id`, and creates the replacement. A credential issuance app prepares the transfer for the holder and the issuer.
+
+Generic wallet send flows typically only let the user enter a receiver and a memo, so they cannot set `cip-tbd/credential-id` in `extraArgs.context`. This is a limitation of such user interfaces, not of the Token Standard: both V1 and V2 transfers carry `extraArgs.context`. An extension is therefore prepared by an app that knows the credential's contract id, e.g. the issuer's dApp discovered via `cip-TBD/credential-issuer-app-url`, or a wallet that offers a dedicated extension flow.
 
 ### DSO Credential Registry Limits
 
@@ -280,8 +282,6 @@ The APIs are implemented as follows:
 2. The Scan app backend running on SV nodes implements the [openapi/credential-registry-v1.yaml](https://github.com/hyperledger-labs/splice/pull/3416/changes#diff-a73145dfdb26770f01b5fc0a9f35c7c34f067584acb6ec16de7e82040df6f835), so that any Scan app can be used to interact with the credentials registry.
 3. The Scan app proxy served by the validator app implements the [openapi/credential-registry-v1.yaml](https://github.com/hyperledger-labs/splice/pull/3416/changes#diff-a73145dfdb26770f01b5fc0a9f35c7c34f067584acb6ec16de7e82040df6f835), calling out to multiple Scan apps and comparing the results to implement BFT reads.
 4. The SV app is extended with automation ensuring that there is exactly one `AnsCredentialRecord` self-published by the `dso` party, which announces the URLs of the Scan apps serving the off-ledger APIs of the DSO Credential Registry.
-
-A generic Token Standard V1 send can set the receiver and a memo, and still cannot set `extraArgs.context`. Wallets that can only set those two fields go through the credential issuer's dApp, which prepares the transaction. Extending a credential is a transfer on the `TransferFactory` of `AnsRules`. The preparing app supplies the existing contract id. The holder and the issuer both authorize the replacement when they are different parties.
 
 ## Standardized Application and Metadata Discovery
 
