@@ -15,7 +15,7 @@ This CIP serves to align the stakeholders of [CIP-0105](../cip-0105/cip-0105.md)
 The proposed implementation closely follows the high-level guidance laid out by these two CIPs except for the following changes:
 
 1. Add a grace period for underlocked FA rights during which they are only temporarily suspended. The grace period defaults to seven days and can be changed by SV voting. It serves to reduce the trust that FA operators need to have in their lock owners; and thus increases the expected total amount locked by FA locks.
-2. Clarify that the termination of the SV lock-up requirement stops the enforcement of the lock-up, but SV lock funds are released via vesting to avoid a price-shock.
+2. Clarify that the termination of the SV lock-up requirement stops the enforcement of the lock-up, and SV lock funds are released via vesting to allow for a clearer and more orderly operational transition to the next phase of governance.
 3. Drop the seven day grace period for the enforcement of temporary loss of SV weight
    because that grace period is not economically motivated, but was added to lower the operational overhead of manual enforcement via SV votes.
 4. Require locks to lock a minimum amount to avoid “dust” locks whose management overhead surpasses their value. The minimum lock amount defaults to 10k CC and can be changed by SV voting.
@@ -1185,7 +1185,7 @@ The above priorities also reflect in the following alternatives that we consider
 * **No minimum lock amount:** the minimum lock amount requirement does complicate the operations of staking apps and it would be great to not have it. However without a minimum lock amount there’s a risk that staking apps do produce lots of small locks. A situation that’s similar to how some wallets used to produce lots of “dust” CC holdings, e.g., as part of marketing campaigns. Every lock does consume resources on SV nodes. A minimum lock amount avoids having to spend delivery resources on scalability problems resulting from “dust locks”.
 * **Unvested release of funds upon termination of the SV lock-up requirement:**
   we considered releasing the funds in (vesting) SV locks immediately upon termination of the SV lock-up requirement.
-  We decided against this approach, as it would lead to an immediate increase of available funds, which may cause a price-shock.
+  We decided against this approach in favor of the vesting-based release of SV lock funds, which allows for a clearer and more orderly operational transition to the next phase of governance.
 
 # Reference Implementation
 
@@ -1201,6 +1201,9 @@ See the open and closed PRs to track the progress of the reference implementatio
 This CIP is licensed under CC0-1.0: Creative Commons CC0 1.0 Universal.
 
 # Changelog
+
+* Oct 14, 2026:
+  * clarified rationale wrt termination of SV lock-up requirement
 
 * Oct 9, 2026:
   * simplify termination of SV lock-up by just stopping enforcement
