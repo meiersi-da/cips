@@ -507,7 +507,7 @@ Locks are displayed in wallets as pending TSv1 transfers with
 * receiver: `cip-127_lock-manager::1220000000000000000000000000000000000000000000000000000000000000abcd`
 * memo tag: `cip-127/memo:<lock-parameters>`
 
-where the lock parameters shown as `key=value` pairs separated by `&`. Governance locks will have the following key-value pairs:
+where the lock parameters shown as `key=value` pairs are separated by `&`. Governance locks will have the following key-value pairs:
 
 * `lock-kind=<sv-lock|fa-lock|provisional-fa-lock>`
 * `lock-subject=<sv-name|fa-party-id>`
