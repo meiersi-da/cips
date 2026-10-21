@@ -65,110 +65,101 @@ The Daml APIs mediate the on-ledger interactions of the different applications w
 The schema of credentials is defined by the following Daml code (copied from [Draft PR](https://github.com/hyperledger-labs/splice/pull/3416/changes#diff-808147bf36f1c087a42b92d67d2021c2ca203076cc0e3b6a31f2ccc60497a34d)):
 
 ```haskell
--- | A set of claims that define a credential analogous to W3C Verifiable Credentials.
-data Claims = Claims with
-   values : TextMap Text
-     -- ^ The values of the claims are encoded as key-value pairs to align with the
-      -- common use of key-value pairs in ENS, DNS, k8s, and similar systems. A
-      -- W3C claim of the form (subject, property, value) is represented as a
-      -- key-value pair with the key formed as "property!subject" and value as
-      -- "value".
+-- | A claim that is part of a credential.
+-- Its key, used by the Lookup API, is "property!subject", or just "property" if the subject is not set.
+data Claim = Claim with
+    subject : Optional Text
+      -- ^ The subject of the claim.
+      -- If not set, then the claim pertains to the holder of the credential.
+      -- Implementations SHOULD leave it unset rather than set it to the holder.
+      -- Subjects MUST only contain characters from [a-zA-Z0-9._:/-].
+    property : Text
+      -- ^ The property of the claim.
       --
-      -- When no '!subject' suffix is present in the key, the claim pertains
-      -- to the holder of the credential. Thus the key value pair
+      -- Properties MUST only contain characters from [a-zA-Z0-9._:/-].
       --
-      --  "cip-TBD/displayName" : "Alice"
-      --
-      -- corresponds to the W3C claim
-      -- (subject=holder, property="cip-TBD/displayName", value="Alice").
-      --
-      -- Implementations SHOULD ensure that claims are stored in canonical form without
-      -- redundant '!holder' suffixes in keys.
-      --
-      -- Keys MUST only contain characters from [a-zA-Z0-9._:/!-]
-      -- and the '!' is only allowed to be used to separate property from subject.
-      --
-      -- All keys MUST be namespaced in the form `namespace/property` to avoid collisions.
+      -- All properties MUST be namespaced in the form `namespace/property` to avoid collisions.
       -- The namespace `cip-<nr>` is reserved for CIP-defined properties.
       -- All other applications MUST use a Java-style reverse DNS name for a domain under their control.
-      -- For example, a key for a property `prop` defined by the domain
-      -- `example.com` would be `com.example/prop`.
-   validFrom : Optional Time
-     -- ^ The time from which this credential is valid.
-   validUntil : Optional Time
-     -- ^ The time until which this credential is valid.
-   meta : Metadata
-     -- ^ Metadata associated with these claims. Used for extensibility.
- deriving (Eq, Show)
+      -- For example, a property `prop` defined by the domain `example.com` would be `com.example/prop`.
+    value : Text
+      -- ^ The value of the claim.
+  deriving (Eq, Show)
 
 -- | A view of a credential record stored in a credential registry.
 data CredentialView = CredentialView with
-   admin : Party
-     -- ^ The party that administers this credential registry.
-   issuer : Party
-     -- ^ The party that issued the credential.
-   holder : Party
-     -- ^ The party that holds the credential.
-   claims : Claims
-     -- ^ The credential associated with this record.
-   createdAt : Optional Time
-     -- ^ The time at which this credential record was created.
-     --
-     -- On a record created by `CredentialFactory_UpdateCredentials`, this is that choice's `requestedAt`.
-   expiresAt : Optional Time
-     -- ^ The time at which this credential record expires in the registry.
-     --
-     -- The registry MAY archive the record after this time.
-     --
-     -- Separate from the `validUntil` field in `Claims`, as the expiry time of the
-     -- credential record in the registry is determined by the registry policy and
-     -- may differ from the validity period of the credential itself.
-   meta : Metadata
-     -- ^ Metadata associated with this credential record. Used for extensibility.
- deriving (Eq, Show)
+    admin : Party
+      -- ^ The party that administers this credential registry.
+    issuer : Party
+      -- ^ The party that issued the credential.
+    holder : Party
+      -- ^ The party that holds the credential.
+    claims : [Claim]
+      -- ^ The claims of the credential.
+      --
+      -- For claims interpreted as key-value pairs a last-write-wins semantics
+      -- is used, where the last claim with the same property and subject is
+      -- the one whose value is used.
+    validFrom : Optional Time
+      -- ^ The time from which this credential is valid.
+    validUntil : Optional Time
+      -- ^ The time until which this credential is valid.
+    createdAt : Optional Time
+      -- ^ The time at which this credential record was created.
+    expiresAt : Optional Time
+      -- ^ The time at which this credential record expires in the registry.
+      --
+      -- The registry MAY archive the record after this time.
+      --
+      -- Separate from `validUntil`, as the expiry time of the
+      -- credential record in the registry is determined by the registry policy and
+      -- may differ from the validity period of the credential itself.
+    meta : Metadata
+      -- ^ Metadata associated with this credential record. Used for extensibility.
+  deriving (Eq, Show)
 
 -- | A credential record stored in a credential registry.
 interface Credential where
- viewtype CredentialView
+  viewtype CredentialView
 
- credential_archiveAsHolderImpl : ContractId Credential -> Credential_ArchiveAsHolder -> Update Credential_ArchiveAsHolderResult
- credential_publicFetchImpl : ContractId Credential -> Credential_PublicFetch -> Update CredentialView
+  credential_archiveAsHolderImpl : ContractId Credential -> Credential_ArchiveAsHolder -> Update Credential_ArchiveAsHolderResult
+  credential_publicFetchImpl : ContractId Credential -> Credential_PublicFetch -> Update CredentialView
 
- choice Credential_ArchiveAsHolder : Credential_ArchiveAsHolderResult
-   -- ^ Archive this credential record as the holder.
-   --
-   -- This is always allowed for the holder of the credential and matches the real-world analogue
-   -- of them destroying their copy of the credential.
-   --
-   -- The view is returned for convenience so that the caller does not need to fetch it ahead of time.
-   controller (view this).holder
-   do credential_archiveAsHolderImpl this self arg
+  choice Credential_ArchiveAsHolder : Credential_ArchiveAsHolderResult
+    -- ^ Archive this credential record as the holder.
+    --
+    -- This is always allowed for the holder of the credential and matches the real-world analogue
+    -- of them destroying their copy of the credential.
+    --
+    -- The view is returned for convenience so that the caller does not need to fetch it ahead of time.
+    controller (view this).holder
+    do credential_archiveAsHolderImpl this self arg
 
- nonconsuming choice Credential_PublicFetch : CredentialView
-   -- ^ Fetch the view of the credential.
-   --
-   -- Registries MAY restrict the actor in case the credential is not public.
-   with
-     expectedAdmin : Party
-       -- ^ The expected admin party storing the credential. Implementations MUST validate that this matches
-       -- the admin of the factory.
-       --
-       -- Callers SHOULD ensure they get `expectedAdmin` from a trusted source, e.g., a read against
-       -- their own participant. That way they can ensure that it is safe to exercise a choice
-       -- on a factory contract acquired from an untrusted source *provided*
-       -- all vetted Daml packages only contain interface implementations
-       -- that check the expected admin party.
-     actor : Party
-       -- ^ The party fetching the contract.
-   controller actor
-   do credential_publicFetchImpl this self arg
+  nonconsuming choice Credential_PublicFetch : CredentialView
+    -- ^ Fetch the view of the credential.
+    --
+    -- Registries MAY restrict the actor in case the credential is not public.
+    with
+      expectedAdmin : Party
+        -- ^ The expected admin party storing the credential. Implementations MUST validate that this matches
+        -- the admin of the factory.
+        --
+        -- Callers SHOULD ensure they get `expectedAdmin` from a trusted source, e.g., a read against
+        -- their own participant. That way they can ensure that it is safe to exercise a choice
+        -- on a factory contract acquired from an untrusted source *provided*
+        -- all vetted Daml packages only contain interface implementations
+        -- that check the expected admin party.
+      actor : Party
+        -- ^ The party fetching the contract.
+    controller actor
+    do credential_publicFetchImpl this self arg
 
 data Credential_ArchiveAsHolderResult = Credential_ArchiveAsHolderResult with
-   archivedCredential : CredentialView
-     -- ^ The view of the archived credential.
-   meta : Metadata
-     -- ^ Additional metadata specific to the archive operation, used for extensibility.
- deriving (Eq, Show)
+    archivedCredential : CredentialView
+      -- ^ The view of the archived credential.
+    meta : Metadata
+      -- ^ Additional metadata specific to the archive operation, used for extensibility.
+  deriving (Eq, Show)
 ```
 
 Credential registries MAY enforce limits on the credentials they store to avoid operational problems from overly large credentials. The limits are communicated to users via the [Credential Registry Info API](#credential-registry-info-api). See [DSO Credential Registry Limits](#dso-credential-registry-limits) for the concrete limits enforced by the SV operated registry.
@@ -235,27 +226,27 @@ This CIP does not define automatic renewal. Unpaid renewal is a new credential w
 
 ### Extended Expiration Durations
 
-The registry optionally supports extending the expiration of an existing record by burning a CC fee (default 1 $/year, configurable by SV voting).
-The purchased duration is the USD value of the CC burned for that record, divided by the $/year fee.
-A paid extension archives the record being extended and creates a replacement with the same claims and the same `createdAt`.
-`transfer.requestedAt` is the wallet timestamp on the Token Standard transfer, and it MUST already be in the past.
-If the archived record has no `expiresAt`, the transfer is rejected.
-If `expiresAt` is later than `transfer.requestedAt`, the replacement's `expiresAt` is that `expiresAt` plus the purchased duration.
-If `expiresAt` is earlier than or equal to `transfer.requestedAt`, the replacement's `expiresAt` is `transfer.requestedAt` plus the purchased duration.
-If `validUntil` is set, the resulting `expiresAt` is not later than `validUntil`.
-The free period applies only when a record is created or renewed without a CC burn.
+The registry optionally supports extending the expiration of an existing record by burning CC. The fee defaults to USD 1 per year and is configurable by SV voting.
+A paid extension archives the record and creates a replacement with the same claims, the same `createdAt`, and a new `expiresAt`:
 
-`CredentialFactory_UpdateCredentials` creates a credential without burning CC. The new record's `createdAt` is that choice's `requestedAt`, and `expiresAt` is `requestedAt` plus the free period, capped by `validUntil` when `validUntil` is set.
+```
+purchasedDuration = USD value of the burned CC / yearly fee
+newExpiresAt      = max(expiresAt, transfer.requestedAt) + freePeriod + purchasedDuration
+newExpiresAt      = min(newExpiresAt, validUntil)    -- only if validUntil is set
+```
 
-Extending a credential is a transfer on the `TransferFactory` implemented by `AnsRules`. The credential must already exist. The replacement is signed by the holder and the issuer. The receiver party is `cip-tbd_credential-expiry::1220000000000000000000000000000000000000000000000000000000000000abcd`. No participant hosts that party, so the factory omits it from the transfer's informees.
+`transfer.requestedAt` is the wallet timestamp on the Token Standard transfer, and it MUST already be in the past. A paid extension also adds the free period, as creating the record anew would, because its traffic pays for it.
 
-On Token Standard V2, `transfer.sender` is a basic account of the holder or the issuer, and `transfer.receiver` is the basic account of the receiver party. A basic account is an `Account` whose owner is that party, with no provider and an empty account id. `actors` are the holder and the issuer. When they are the same party, that party is the only actor. `transfer.amount` is the CC to burn, and it must be positive. `extraArgs.context` carries `cip-tbd/credential-id` as an `AV_ContractId` of the record being extended.
+`CredentialFactory_UpdateCredentials` creates a credential without burning CC. The new record's `createdAt` is that choice's `requestedAt`, and `expiresAt` is `requestedAt` plus the free period.
 
-On Token Standard V1, the extension is supported only when the issuer and the holder are the same party. Archiving the record and creating its replacement requires the authority of both the issuer and the holder, as both are signatories of the record. A V1 `TransferFactory_Transfer` is controlled by `transfer.sender` alone, so it provides that authority only when the issuer and the holder are the same party. `transfer.sender` and `transfer.receiver` are parties: the sender is that party, and the receiver is the receiver party above. The same context key carries the contract id. When the issuer and the holder are different parties, the extension uses the V2 transfer with both of them as `actors`.
+Extending a credential is a Token Standard transfer on the `TransferFactory` implemented by `AnsRules`. Either the issuer or the holder of the record can extend it alone:
 
-The preparing app asks Scan for the choice context of this transfer. Scan's token-standard handler selects the `AnsRules` factory for a transfer to this receiver party. The app sets `cip-tbd/credential-id` on the context it submits.
+- `transfer.sender` is the issuer or the holder. On Token Standard V2 it is the basic account of that party: an `Account` whose owner is that party, with no provider and an empty account id.
+- `transfer.receiver` is the party `cip-tbd_credential-expiry::1220000000000000000000000000000000000000000000000000000000000000abcd`, or its basic account on V2. No participant hosts that party, so the factory omits it from the transfer's informees.
+- `transfer.amount` is the CC to burn. It MUST NOT be negative. If it is zero, the extension adds only the free period.
+- `extraArgs.context` carries `cip-tbd/credential-id` as an `AV_ContractId` of the record being extended.
 
-The factory burns the transferred CC, archives the record named by `cip-tbd/credential-id`, and creates the replacement. A credential issuance app prepares the transfer for the holder and the issuer.
+The preparing app asks Scan for the choice context of this transfer. Scan's token-standard handler selects the `AnsRules` factory for a transfer to this receiver party. The app sets `cip-tbd/credential-id` on the context it submits. The factory burns the transferred CC, archives the record, and creates the replacement.
 
 Generic wallet send flows typically only let the user enter a receiver and a memo, so they cannot set `cip-tbd/credential-id` in `extraArgs.context`. This is a limitation of such user interfaces, not of the Token Standard: both V1 and V2 transfers carry `extraArgs.context`. An extension is therefore prepared by an app that knows the credential's contract id, e.g. the issuer's dApp discovered via `cip-TBD/credential-issuer-app-url`, or a wallet that offers a dedicated extension flow.
 
@@ -276,12 +267,14 @@ These limits are advertised via the Credential Registry Info API. Other registri
 
 The APIs are implemented as follows:
 
-1. The `splice-amulet-name-service` package is extended with two templates as [shown on this PR](https://github.com/hyperledger-labs/splice/pull/3416/changes#diff-271a41476c5ed80c77cbe363f39cc58f5f422a6c9991cfc2fa2bd65398802d7e).
+1. The `splice-amulet-name-service` package is extended as [shown on this PR](https://github.com/hyperledger-labs/splice/pull/3416/changes#diff-271a41476c5ed80c77cbe363f39cc58f5f422a6c9991cfc2fa2bd65398802d7e):
   1. The `AnsCredentialRegistry` template implements `CredentialFactory`.
   2. The `AnsCredentialRecord` template implements the `Credential` interface and serves to record credentials in the registry.
+  3. The `AnsRules` template implements the Token Standard `TransferFactory` (V1 and V2) to burn CC for [paid extensions](#extended-expiration-durations).
 2. The Scan app backend running on SV nodes implements the [openapi/credential-registry-v1.yaml](https://github.com/hyperledger-labs/splice/pull/3416/changes#diff-a73145dfdb26770f01b5fc0a9f35c7c34f067584acb6ec16de7e82040df6f835), so that any Scan app can be used to interact with the credentials registry.
 3. The Scan app proxy served by the validator app implements the [openapi/credential-registry-v1.yaml](https://github.com/hyperledger-labs/splice/pull/3416/changes#diff-a73145dfdb26770f01b5fc0a9f35c7c34f067584acb6ec16de7e82040df6f835), calling out to multiple Scan apps and comparing the results to implement BFT reads.
 4. The SV app is extended with automation ensuring that there is exactly one `AnsCredentialRecord` self-published by the `dso` party, which announces the URLs of the Scan apps serving the off-ledger APIs of the DSO Credential Registry.
+5. The `splice-amulet` package adds `ExternalPartyAmuletRules_BurnAmulet`, which burns CC and returns its USD value. Scan's token-standard handler selects the `AnsRules` factory for transfers to the credential-expiry receiver party.
 
 ## Standardized Application and Metadata Discovery
 
