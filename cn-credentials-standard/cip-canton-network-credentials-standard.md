@@ -10,6 +10,21 @@
   Created: 2026-01-09
 </pre>
 
+FIXME:
+- remove KYC use-cases; generally shrink use-cases to the ones just required to get this proposal through
+- SV credential registry -> DSO credential registry
+- use kebab-case and cip prefix in keys
+- change lookup API to be limited
+- change rich credential lookup API in diagram
+  - make the rich credential lookup API be served by explorers
+  - credential lookup API served by scan should only support queries of the form (property, issuer?, holder?)
+    - this is all that is required to support lookups of the registry API, and can be served with a single index in Scan DB
+- link to registry info HTTP API
+- self-review with copilot
+- reopen draft PR and adjust links
+- comment on
+- adjust API links to draft PR
+
 ## Abstract
 
 Define standard APIs for storing, retrieving, and using credentials on the Canton Network.
@@ -66,7 +81,6 @@ The schema of credentials is defined by the following Daml code (copied from [Dr
 
 ```haskell
 -- | A claim that is part of a credential.
--- Its key, used by the Lookup API, is "property!subject", or just "property" if the subject is not set.
 data Claim = Claim with
     subject : Optional Text
       -- ^ The subject of the claim.
@@ -96,10 +110,6 @@ data CredentialView = CredentialView with
       -- ^ The party that holds the credential.
     claims : [Claim]
       -- ^ The claims of the credential.
-      --
-      -- For claims interpreted as key-value pairs a last-write-wins semantics
-      -- is used, where the last claim with the same property and subject is
-      -- the one whose value is used.
     validFrom : Optional Time
       -- ^ The time from which this credential is valid.
     validUntil : Optional Time
@@ -130,8 +140,6 @@ interface Credential where
     --
     -- This is always allowed for the holder of the credential and matches the real-world analogue
     -- of them destroying their copy of the credential.
-    --
-    -- The view is returned for convenience so that the caller does not need to fetch it ahead of time.
     controller (view this).holder
     do credential_archiveAsHolderImpl this self arg
 
@@ -139,16 +147,10 @@ interface Credential where
     -- ^ Fetch the view of the credential.
     --
     -- Registries MAY restrict the actor in case the credential is not public.
+    --
+    -- Callers SHOULD check that the fetched credential view matches their
+    -- expectations, e.g., that it has the correct admin, holder and issuer.
     with
-      expectedAdmin : Party
-        -- ^ The expected admin party storing the credential. Implementations MUST validate that this matches
-        -- the admin of the factory.
-        --
-        -- Callers SHOULD ensure they get `expectedAdmin` from a trusted source, e.g., a read against
-        -- their own participant. That way they can ensure that it is safe to exercise a choice
-        -- on a factory contract acquired from an untrusted source *provided*
-        -- all vetted Daml packages only contain interface implementations
-        -- that check the expected admin party.
       actor : Party
         -- ^ The party fetching the contract.
     controller actor
@@ -156,7 +158,8 @@ interface Credential where
 
 data Credential_ArchiveAsHolderResult = Credential_ArchiveAsHolderResult with
     archivedCredential : CredentialView
-      -- ^ The view of the archived credential.
+      -- ^ The view of the archived credential. It is returned for convenience
+      -- so that the caller does not need to fetch it ahead of time.
     meta : Metadata
       -- ^ Additional metadata specific to the archive operation, used for extensibility.
   deriving (Eq, Show)
@@ -172,20 +175,17 @@ Implementing this API is optional for credential registries. They CAN decide to 
 
 This API uses the factory pattern pioneered in CIP-56: the `CredentialFactory` Daml interface provides a choice `CredentialFactory_UpdateCredentials` that allows for a bulk update of credentials with the same issuer and holder. The choice takes `requestedAt`, the time when the creation of the new record was requested. Callers supply it so that implementations can compute expiry without `getTime`. Callers MUST set `requestedAt` in the past, and SHOULD set it close to ledger time, because the free period is measured from it. The new record's `createdAt` is that `requestedAt`. A corresponding HTTP API endpoint allows retrieval of the context to call that choice.
 
-Draft specifications of these two interfaces can be found in the draft PR here:
+Specifications of these two interfaces can be found here:
 
 * [Splice/Api/Credential/RegistryV1.daml](https://github.com/hyperledger-labs/splice/pull/3416/changes#diff-808147bf36f1c087a42b92d67d2021c2ca203076cc0e3b6a31f2ccc60497a34d) (includes the data format of credentials)
 * [openapi/credential-registry-v1.yaml](https://github.com/hyperledger-labs/splice/pull/3416/changes#diff-a73145dfdb26770f01b5fc0a9f35c7c34f067584acb6ec16de7e82040df6f835)
 
-In that draft the factory argument is still named `newCreatedAt`. This CIP calls it `requestedAt`.
-
 #### Expected App Usage of Daml APIs
 
-We expect applications to be able to `fetch` credentials as part of their Daml workflows using the `Credential` interface to fetch the contract and compute its `CredentialView`. The workflow thereby gets access to full `CredentialView` and can use its data to influence its actions.
-
+We expect applications that need to fetch credentials as part of their Daml workflows to use `Credential_PublicFetch`.
 We also expect wallets to be able to list all credentials held by their user by asking the user's validator node for all active contracts implementing the `Credential` interface. Wallets can offer the user to archive an unwanted credential using the `Credential_ArchiveAsHolder` choice. We also expect that wallets can offer the user to open the credential issuer's custom dApp for managing that credential. We expect them to be able to do as explained in [Standardized Application and Metadata Discovery](#standardized-application-and-metadata-discovery).
 
-Note that apps and users that want to use credentials from a specific registry on-ledger must vet the .dars of that credential registry.
+Note that apps and users that want to use credentials from a specific registry on-ledger must vet the DAR files of that credential registry.
 
 ### Read-Only HTTP APIs
 
@@ -196,7 +196,7 @@ The purpose of the credential registry info API is twofold:
 1. It enables an asynchronous rollout of newer versions of the credential registry APIs.
 2. It informs clients about constraints of the registry (e.g. limits on the number of claims or results).
 
-A draft API is specified in [openapi/credential-registry-v1.yaml](https://github.com/hyperledger-labs/splice/pull/3416/changes#diff-a73145dfdb26770f01b5fc0a9f35c7c34f067584acb6ec16de7e82040df6f835).
+The API is specified in [openapi/credential-registry-v1.yaml](https://github.com/hyperledger-labs/splice/pull/3416/changes#diff-a73145dfdb26770f01b5fc0a9f35c7c34f067584acb6ec16de7e82040df6f835).
 
 #### Credential Lookup API
 
