@@ -3,7 +3,7 @@
   Layer: Daml
   Title: Canton Network Credentials Standard
   Author:
-    Simon Meier
+    PixelPlex, Simon Meier
   License: CC0-1.0
   Status: Draft
   Type: Standards Track
@@ -11,7 +11,7 @@
 </pre>
 
 FIXME:
-- remove KYC use-cases; generally shrink use-cases to the ones just required to get this proposal through
+- remove KYC use-cases; generally shrink use-cases to the essential ones
 - SV credential registry -> DSO credential registry
 - use kebab-case and cip prefix in keys
 - change lookup API to be limited
