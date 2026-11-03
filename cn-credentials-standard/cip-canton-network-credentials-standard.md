@@ -274,7 +274,8 @@ The registry supports extending the expiration of an existing record by burning 
 The default fee is `1.0 USD/year` (configurable by SV voting).
 An extension archives the record and creates a replacement with the same claims, the same `createdAt`, and a new `expiresAt`.
 
-The holder or issuer can request such an extension by initiating a Token Standard transfer with:
+The holder or issuer can request such an extension on their own, as the extension does not change the claims of the credential.
+They do so by initiating a Token Standard transfer with:
 
 - `sender` equal to the `issuer` or `holder` of the credential to extend
 - `amount` is the amount of CC to burn
@@ -293,6 +294,8 @@ newExpiresAt      = min(newExpiresAt0, validUntil)    -- only if validUntil is s
 ```
 
 where `transfer.requestedAt` is the wallet provided timestamp on the Token Standard transfer, which is checked to be in the past.
+The registry rejects extension requests where `newExpiresAt` is not later than the current `expiresAt`,
+so that no CC is burned without effect.
 
 A paid extension also adds the free period, as that is de-facto covered by the traffic paid for the extension transaction.
 
@@ -308,6 +311,7 @@ A credential record is accepted by the Splice Credential Registry only if all of
 - each claim property is at most 254 characters and each claim subject is at most 255 characters, so that a full party-id can appear as subject.
 - each claim value is shorter than 2048 characters.
 - if set, `validFrom` is not earlier than `createdAt`, and `validUntil` is later than both `createdAt` and any `validFrom`.
+- if `validUntil` is set, then `expiresAt` is not later than `validUntil`.
 
 The size limits are advertised via the [Credential Registry Info API](#credential-registry-info-api). Other registries MAY choose different limits.
 
@@ -350,6 +354,8 @@ The above properties will be used to make the Splice Credential Registry and the
 | `dso` | `splice.lfdecentralizedtrust.org/registry-urls` | `<scan-url1>,...,<scan-urlN>` |
 
 The Scan URLs are the ones published per network here: [https://canton.foundation/sv-network-status/](https://canton.foundation/sv-network-status/).
+These URLs, or the Scan proxy of a validator node, serve as the bootstrap for discovery: clients use them to query the Splice Credential Registry.
+The `dso` credential above serves to make the Splice Credential Registry discoverable in the same way as any other credential registry.
 The SV app takes care of creating and updating this credential as the Scan URLs change over time.
 
 ## Motivation
