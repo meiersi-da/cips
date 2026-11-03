@@ -17,8 +17,12 @@ FIXME:
   - adjust reference implementation to match code shown in here
   - split the HTTP API definitions into the read-only HTTP API and the factory HTTP API, which is optional
     - preferred option: in splice repo
-      - `/credential-standard/splice-api-credential-registry-v1.yaml`
-      - `/credential-standard/splice-api-credential-registry-update-v1.yaml`
+      - `/credential-standard/splice-api-credential-registry-v1.yaml` (read-only)
+      - `/credential-standard/splice-api-credential-registry-update-v1.yaml` (modification)
+    - then update all OpenAPI links in this CIP, which currently all point to the single `openapi/credential-registry-v1.yaml`
+    - add the missing spec link for the [Bulk Credential Retrieval API](#bulk-credential-retrieval-api)
+      (note though that bulk retrieval is party of read-only API)
+    - add the spec link for the factory context endpoint in [Credential Factory Interface](#credential-factory-interface)
   - move the Splice Credential Registry implementation out of ANS into a separate package/module (e.g., `Splice.Credentials`)
 
 ## Abstract
@@ -46,7 +50,7 @@ This standard is concerned with entities and apps acting in the following roles:
 
 - **credential issuers**: entities that issue credentials and back their veracity
 - **credential holders**: entities that hold credentials and agree to the credential's claims
-- **credential registry administrators**: entities that store and serve credentials that were jointly published by their issuer and holder
+- **credential registry administrators**: entities that store and serve credentials, either published jointly by their issuer and holder or created by registry-internal workflows
 - **network explorers**: entities building apps for exploring Canton Network activity and structure
 - **app providers**: entities that operate apps that retrieve and use credentials in their UIs and/or in their on-ledger workflows
 - **app users**: entities that use apps that use credentials
@@ -77,7 +81,7 @@ serves the dual purpose of issuing credentials and serving the read-only Credent
 
 #### Daml APIs
 
-The Daml APIs mediate the on-ledger interactions of the different applications with the credential registry. They consist of the mandatory implementation of the `Credential` interface and an optional implementation of the `CredentialFactory` interface. We explain them in the following two sections. We specify the expected usage of these APIs by credential issuers and wallets thereafter.
+The Daml APIs mediate the on-ledger interactions of the different applications with the credential registry. They consist of the mandatory implementation of the `Credential` interface and an optional implementation of the `CredentialFactory` interface. We explain them in the following two sections. We specify the expected usage of these APIs by apps and wallets thereafter.
 
 ##### Credential Interface
 
@@ -147,7 +151,7 @@ interface Credential where
   viewtype CredentialView
 
   credential_revokeImpl : ContractId Credential -> Credential_Revoke -> Update Credential_RevokeResult
-  credential_publicFetchImpl : ContractId Credential -> Credential_Get -> Update CredentialView
+  credential_getImpl : ContractId Credential -> Credential_Get -> Update CredentialView
 
   nonconsuming choice Credential_Revoke : Credential_RevokeResult
     -- ^ Revoke this credential record.
@@ -172,16 +176,16 @@ interface Credential where
     -- expectations, e.g., that it has the correct admin, holder and issuer.
     with
       actors : [Party]
-        -- ^ The party fetching the contract.
+        -- ^ The parties fetching the contract.
     controller actors
-    do credential_publicFetchImpl this self arg
+    do credential_getImpl this self arg
 
 data Credential_RevokeResult = Credential_RevokeResult with
     archivedCredential : CredentialView
       -- ^ The view of the revoked credential. It is returned for convenience
       -- so that the caller does not need to fetch it ahead of time.
     meta : Metadata
-      -- ^ Additional metadata specific to the archive operation, used for extensibility.
+      -- ^ Additional metadata specific to the revoke operation, used for extensibility.
   deriving (Eq, Show)
 ```
 
@@ -195,7 +199,7 @@ Implementing this API is optional for credential registries. They MAY decide to 
 
 This API uses the factory pattern pioneered in [CIP-0056](../cip-0056/cip-0056.md): the `CredentialFactory` Daml interface provides a choice `CredentialFactory_UpdateCredentials` that allows for a bulk update of credentials with the same issuer and holder. Each element of its `newCredentials` argument becomes one credential record with its claims and validity period. A corresponding HTTP API endpoint allows retrieval of the context to call that choice.
 
-Specifications of these two interfaces can be found here:
+The specifications of the `Credential` and `CredentialFactory` Daml interfaces and of the HTTP API endpoint can be found here:
 
 - [Splice/Api/Credential/RegistryV1.daml](https://github.com/hyperledger-labs/splice/pull/3416/changes#diff-808147bf36f1c087a42b92d67d2021c2ca203076cc0e3b6a31f2ccc60497a34d) (includes the data format of credentials)
 - [openapi/credential-registry-v1.yaml](https://github.com/hyperledger-labs/splice/pull/3416/changes#diff-a73145dfdb26770f01b5fc0a9f35c7c34f067584acb6ec16de7e82040df6f835)
@@ -259,7 +263,7 @@ They ingest credentials through the [Bulk Credential Retrieval API](#bulk-creden
 ### Splice Credential Registry
 
 Splice adds a decentralized base credential registry that is run by the SV nodes as part of the Global Synchronizer.
-Its admin party is the `dso` party, and it implements all the APIs defined above.
+Its admin party is the `dso` party, and it implements all the APIs defined above, including the optional `CredentialFactory` API.
 
 By default, there is no Canton Coin (CC) payment required for creating credential records in the registry.
 Instead, the registry expires the records at the end of a free period of 90 days by default (configurable by SV voting),
@@ -309,7 +313,7 @@ A credential record is accepted by the Splice Credential Registry only if all of
 
 - it contains at most 32 claims.
 - each claim property is at most 254 characters and each claim subject is at most 255 characters, so that a full party-id can appear as subject.
-- each claim value is shorter than 2048 characters.
+- each claim value is at most 2047 characters.
 - if set, `validFrom` is not earlier than `createdAt`, and `validUntil` is later than both `createdAt` and any `validFrom`.
 - if `validUntil` is set, then `expiresAt` is not later than `validUntil`.
 
@@ -341,7 +345,7 @@ We expect future CIPs to define additional well-known properties for discovering
 
 #### Discovering CIP-0056 Registries
 
-Token Standard registries use the same mechanism to publish the URLs of their off-ledger APIs using the key `splice.lfdecentralizedtrust.org/registry-urls` defined in CIP-0056.
+Token Standard registries use the same mechanism to publish the URLs of their off-ledger APIs using the property `splice.lfdecentralizedtrust.org/registry-urls` defined in CIP-0056.
 This enables the automatic discovery of the off-ledger API URLs for token registries by wallets and apps as [described in CIP-0056](../cip-0056/cip-0056.md#off-ledger-api-discovery-and-access).
 
 #### Discovering the Splice Credential Registry and Canton Coin Token Registry
@@ -364,8 +368,8 @@ There is no standardized way for application discovery on the Canton Network.
 This is for example becoming a problem for the growing set of token registries on the network,
 as the [approach to their off-ledger API discovery described in CIP-0056](../cip-0056/cip-0056.md#off-ledger-api-discovery-and-access)
 cannot yet be implemented.
-We also expect this service discovery problem to appear for other types of applications and services on the Canton Network.
-This CIP solves service discovery on the Canton Network.
+We also expect this application discovery problem to appear for other types of applications and services on the Canton Network.
+This CIP solves application and service discovery on the Canton Network.
 
 Furthermore, this CIP also provides a foundation for publishing and discovering metadata about parties on the Canton Network.
 Therefore providing the building blocks for apps to improve their UX for displaying actors and counter-parties on the Canton Network.
@@ -401,9 +405,9 @@ The Splice Credential Registry is expected to be implemented as follows:
    1. A template that implements the `Credential` interface and serves to record credentials in the registry.
    2. An implementation of the `CredentialFactory`, so that issuers and holders can jointly publish credentials to the registry.
    3. A modified Token Standard `TransferFactory` implementation that supports burning CC for [paid extensions](#extended-expiration-durations).
-2. The Scan app backend running on SV nodes implements both HTTP APIs,
+2. The Scan app backend running on SV nodes implements the read-only HTTP APIs and the HTTP API of the `CredentialFactory`,
    so that any Scan app can be used to interact with the Splice Credential Registry.
-   The Scan app internally builds an index over all credentials in its backing Postgres DB.  A single index is sufficient,
+   The Scan app internally builds an index over all credentials in its backing Postgres DB. A single multi-column index is sufficient,
    as the lookup API only supports one query pattern.
 3. The Scan app proxy served by the validator app implements the same HTTP APIs, calling out to multiple Scan apps and comparing the results to implement BFT reads.
 
