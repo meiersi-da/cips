@@ -231,9 +231,7 @@ The credential lookup API serves queries of the form `(property, issuer?, holder
 - `property` is required and matches the whole property of a claim, not a prefix.
 - `issuer`, `holder`, and `subject` are optional filters. They MUST be specified in order: a filter MAY only be specified if all filters before it are specified.
 
-The API returns the credential records matching the filter.
-
-Thus the valid queries are `(property)`, `(property, issuer)`, `(property, issuer, holder)`, and `(property, issuer, holder, subject)`.
+The API returns the credential records with matching `issuer` and `holder` that contain a claim with matching `property` and `subject`.
 This is all that is needed for the lookups in [Standardized Application and Metadata Discovery](#standardized-application-and-metadata-discovery), and it keeps the indexing overhead for credential registries small. Richer queries are left to network explorers, see [Rich Credential Lookup](#rich-credential-lookup).
 
 The API is specified in [openapi/credential-registry-v1.yaml](https://github.com/hyperledger-labs/splice/pull/3416/changes#diff-a73145dfdb26770f01b5fc0a9f35c7c34f067584acb6ec16de7e82040df6f835).
@@ -243,10 +241,10 @@ By default the API only returns the `CredentialView` of a credential. It optiona
 
 The API returns the record time of the transaction that created the credential contract.
 Record time is the Canton protocol sequencing time of that transaction's confirmation request.
-It orders the results with matching `(property, issuer, holder, subject)` by record time descending, with contract id ascending as the tie-break.
+It orders the results with equal `property`, `issuer`, and `holder` by record time descending, with contract id ascending as the tie-break.
 
 Two credential records are duplicates if they have the same `issuer` and `holder`, and both contain a claim with the same `subject` and `property`.
-Clients that need to choose a single credential record among duplicates can implement last-write-wins semantics by selecting the first record in the returned order whose validity period is effective,
+Clients that need to choose a single claim among duplicates can implement last-write-wins semantics by selecting the claim from the first record in the returned order whose validity period is effective,
 i.e., the record with the latest record time, breaking ties by the smallest contract id.
 
 The API MAY return records whose `expiresAt` has passed, but which the registry has not yet archived.
@@ -254,7 +252,7 @@ Clients SHOULD ignore `expiresAt` when choosing a record, as it is the validity 
 
 Note that operations that re-create a record, such as an [extension of its expiration](#extended-expiration-durations),
 produce a new contract with a new record time. Such a re-created record thus counts as the latest write,
-even if its `createdAt` is older than that of other records with the same property.
+even if its `createdAt` is older than that of its duplicates.
 
 ##### Bulk Credential Retrieval API
 
@@ -265,7 +263,7 @@ An explorer that falls further behind than that window starts over and receives 
 
 ##### Rich Credential Lookup
 
-Network explorers MAY offer richer lookups than the standardized [Credential Lookup API](#credential-lookup-api), for example by property prefix, by several issuers, or by subject.
+Network explorers MAY offer richer lookups than the standardized [Credential Lookup API](#credential-lookup-api), for example by property prefix, by several issuers, or by subject alone.
 They ingest credentials through the [Bulk Credential Retrieval API](#bulk-credential-retrieval-api) and build their own indexes. This CIP does not standardize such lookups, and the Splice Credential Registry does not serve them.
 
 ### Splice Credential Registry
@@ -336,7 +334,8 @@ The size limits are advertised via the [Credential Registry Info API](#credentia
 
 Together the APIs defined in this CIP and the Splice Credential Registry enable
 defining standard ways to discover applications and metadata about them.
-It works by applications using self-published credentials in the Splice Registry to advertise their capabilities and metadata, which can then be discovered by apps by querying the registry.
+It works by applications using self-published credentials in the Splice Credential Registry to advertise their capabilities and metadata, which can then be discovered by apps by querying the registry.
+Clients look up property `p` of party `X` with the [Credential Lookup API](#credential-lookup-api) query `(p, X, X, X)`.
 
 The concrete claims to use in these credentials are usually defined in CIPs.
 This works without conflicts as we expect that the properties in a credential's claims have the form `namespace/property` and the namespaces are one of the following:
@@ -368,8 +367,9 @@ It serves to discover the [CIP-0103 dApp](../cip-0103/cip-0103.md) of a specific
 
 The property `splice.lfdecentralizedtrust.org/registry-urls` is already defined in [CIP-0056](../cip-0056/cip-0056.md).
 
-It serves to discover the off-ledger API URLs of specific registries via a self-published credential in the Splice Credential Registry, with the claim subject being the textual representation of the registry admin party's party-id.
-This enables to actually implement the automatic discovery of the off-ledger API URLs for token registries by wallets and apps as [outlined in CIP-0056](../cip-0056/cip-0056.md#off-ledger-api-discovery-and-access).
+Token registries publish it in a self-published credential (issuer = holder = subject = registry admin) in the Splice Credential Registry.
+This enables wallets and apps to automatically discover the off-ledger API URLs of token registries as [outlined in CIP-0056](../cip-0056/cip-0056.md#off-ledger-api-discovery-and-access).
+It replaces the CNS-based lookup described there.
 
 #### Discovering the Splice Credential Registry and Canton Coin Token Registry
 
@@ -394,9 +394,9 @@ cannot yet be implemented.
 We also expect this application discovery problem to appear for other types of applications and services on the Canton Network.
 This CIP solves application and service discovery on the Canton Network.
 
-Furthermore, this CIP also provides a foundation for publishing and discovering metadata about parties on the Canton Network.
-Therefore providing the building blocks for apps to improve their UX for displaying actors and counter-parties on the Canton Network.
-For example, a [party profile as proposed in this CIP by PixelPlex](https://github.com/canton-foundation/cips/pull/169).
+Furthermore, this CIP provides a foundation for publishing and discovering metadata about parties on the Canton Network,
+which apps can use to improve how they display actors and counter-parties,
+e.g., using [party profiles as proposed in this CIP](https://github.com/canton-foundation/cips/pull/169).
 
 ## Rationale
 
