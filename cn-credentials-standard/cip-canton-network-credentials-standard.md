@@ -91,10 +91,10 @@ Concretely, it is defined by the following Daml code copied from the [reference 
 ```haskell
 -- | A claim that is part of a credential.
 data Claim = Claim with
-    subject : Optional Text
+    subject : Text
       -- ^ The subject of the claim.
       --
-      -- If not set, then it refers to the holder of the credential,
+      -- Often set to the textual representation of the holder party-id of the credential,
       -- which is the most common subject.
       --
       -- Subjects MUST only contain characters from [a-zA-Z0-9 ._:/-].
@@ -340,7 +340,7 @@ The size limits are advertised via the [Credential Registry Info API](#credentia
 Together the APIs defined in this CIP and the Splice Credential Registry enable
 defining standard ways to discover applications and metadata about them.
 It works by applications using self-published credentials in the Splice Credential Registry to advertise their capabilities and metadata, which can then be discovered by apps by querying the registry.
-Clients look up property `p` of party `X` with the [Credential Lookup API](#credential-lookup-api) query `(p, X, X)` and select the claims whose subject is `X` or unset (referring to the holder `X`).
+Clients look up property `p` of party `X` with the [Credential Lookup API](#credential-lookup-api) query `(p, X, X)` and select the claims whose subject is `X`.
 
 The concrete claims to use in these credentials are usually defined in CIPs.
 This works without conflicts as we expect that the properties in a credential's claims have the form `namespace/property` and the namespaces are one of the following:
