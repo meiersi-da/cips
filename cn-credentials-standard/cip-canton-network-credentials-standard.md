@@ -229,7 +229,7 @@ The API is specified in [openapi/credential-registry-v1.yaml](https://github.com
 The credential lookup API serves queries of the form `(property, issuer?, holder?)`:
 
 - `property` is required and matches the whole property of a claim, not a prefix.
-- `issuer` and `holder` are optional. Each is a single party.
+- `issuer` and `holder` are optional, but `issuer` must be specified if the `holder` is specified. Each is a single party.
 
 The API returns the credential records that contain at least one claim with that property. This is all that is needed for the lookups in [Standardized Application and Metadata Discovery](#standardized-application-and-metadata-discovery), and it keeps the indexing overhead for credential registries small. Richer queries are left to network explorers, see [Rich Credential Lookup](#rich-credential-lookup).
 
