@@ -226,12 +226,15 @@ The API is specified in [openapi/credential-registry-v1.yaml](https://github.com
 
 ##### Credential Lookup API
 
-The credential lookup API serves queries of the form `(property, issuer?, holder?)`:
+The credential lookup API serves queries of the form `(property, issuer?, holder?, subject?)`:
 
 - `property` is required and matches the whole property of a claim, not a prefix.
-- `issuer` and `holder` are optional, but `issuer` must be specified if the `holder` is specified. Each is a single party.
+- `issuer`, `holder`, and `subject` are optional filters. They MUST be specified in order: a filter MAY only be specified if all filters before it are specified.
 
-The API returns the credential records that contain at least one claim with that property. This is all that is needed for the lookups in [Standardized Application and Metadata Discovery](#standardized-application-and-metadata-discovery), and it keeps the indexing overhead for credential registries small. Richer queries are left to network explorers, see [Rich Credential Lookup](#rich-credential-lookup).
+The API returns the credential records matching the filter.
+
+Thus the valid queries are `(property)`, `(property, issuer)`, `(property, issuer, holder)`, and `(property, issuer, holder, subject)`.
+This is all that is needed for the lookups in [Standardized Application and Metadata Discovery](#standardized-application-and-metadata-discovery), and it keeps the indexing overhead for credential registries small. Richer queries are left to network explorers, see [Rich Credential Lookup](#rich-credential-lookup).
 
 The API is specified in [openapi/credential-registry-v1.yaml](https://github.com/hyperledger-labs/splice/pull/3416/changes#diff-a73145dfdb26770f01b5fc0a9f35c7c34f067584acb6ec16de7e82040df6f835).
 By default the API only returns the `CredentialView` of a credential. It optionally also includes the underlying contract so that it can be disclosed for usage in a Daml transaction that reads the credential.
@@ -240,10 +243,14 @@ By default the API only returns the `CredentialView` of a credential. It optiona
 
 The API returns the record time of the transaction that created the credential contract.
 Record time is the Canton protocol sequencing time of that transaction's confirmation request.
-It orders the results by record time descending, with contract id ascending as the tie-break.
+It orders the results with matching `(property, issuer, holder, subject)` by record time descending, with contract id ascending as the tie-break.
 
-Clients that need to choose a single credential record can implement last-write-wins semantics by selecting the first record in the returned order whose validity period is effective,
+Two credential records are duplicates if they have the same `issuer` and `holder`, and both contain a claim with the same `subject` and `property`.
+Clients that need to choose a single credential record among duplicates can implement last-write-wins semantics by selecting the first record in the returned order whose validity period is effective,
 i.e., the record with the latest record time, breaking ties by the smallest contract id.
+
+The API MAY return records whose `expiresAt` has passed, but which the registry has not yet archived.
+Clients SHOULD ignore `expiresAt` when choosing a record, as it is the validity period given by `validFrom` and `validUntil` that determines whether a credential is effective.
 
 Note that operations that re-create a record, such as an [extension of its expiration](#extended-expiration-durations),
 produce a new contract with a new record time. Such a re-created record thus counts as the latest write,
@@ -253,7 +260,8 @@ even if its `createdAt` is older than that of other records with the same proper
 
 The purpose of the bulk credential retrieval API is to enable network explorers to ingest all credentials of a registry as they are created, updated, and archived.
 
-The corresponding HTTP endpoints work by exposing the list of synchronizers which are used by the registry to store credentials, and then serving pages of create and archive events per synchronizer in ascending record time order, with contract id ascending as the tie-break. A registry MAY prune the events of records that were archived more than 7 days ago, so an explorer that falls further behind starts over and receives the current records without their pruned history.
+The corresponding HTTP endpoints work by exposing the list of synchronizers which are used by the registry to store credentials, and then serving pages of create and archive events per synchronizer in ascending record time order, with contract id ascending as the tie-break. A registry MAY prune the events of archived records once they are older than its retention window, which it advertises via the [Credential Registry Info API](#credential-registry-info-api).
+An explorer that falls further behind than that window starts over and receives the current records without their pruned history.
 
 ##### Rich Credential Lookup
 
@@ -264,6 +272,8 @@ They ingest credentials through the [Bulk Credential Retrieval API](#bulk-creden
 
 Splice adds a decentralized base credential registry that is run by the SV nodes as part of the Global Synchronizer.
 Its admin party is the `dso` party, and it implements all the APIs defined above, including the optional `CredentialFactory` API.
+It sets `revokableBy` to `[[holder], [issuer]]` on all its records, so that either the holder or the issuer can revoke a record on their own.
+It uses a retention window of 7 days for the events served by the [Bulk Credential Retrieval API](#bulk-credential-retrieval-api).
 
 By default, there is no Canton Coin (CC) payment required for creating credential records in the registry.
 Instead, the registry expires the records at the end of a free period of 90 days by default (configurable by SV voting),
@@ -326,30 +336,40 @@ The size limits are advertised via the [Credential Registry Info API](#credentia
 
 Together the APIs defined in this CIP and the Splice Credential Registry enable
 defining standard ways to discover applications and metadata about them.
-It works by a CIP defining claim properties within the CIP's namespace together with
-their purpose and expected usage.
+It works by applications using self-published credentials in the Splice Registry to advertise their capabilities and metadata, which can then be discovered by apps by querying the registry.
 
-This CIP defines the following properties:
-
-- `cip-tbd/credential-registry-urls`: serves to discover the off-ledger credential registry API of a specific credential registry admin party `registryAdmin`.
-  It is published by `registryAdmin` using a self-published credential (issuer = holder = `registryAdmin`) in the Splice Credential Registry,
-  whose claim subject is the textual representation of `registryAdmin`'s party-id.
-  It specifies a comma-separated list of URL prefixes for party `registryAdmin`. Clients append the paths of the credential registry OpenAPI to them, as for the CIP-0056 registry URLs.
-  Multiple URLs are supported for decentralized registries, so that clients can implement BFT reads.
-
-- `cip-tbd/credential-issuer-app-url`: serves to discover the [CIP-0103 dApp](../cip-0103/cip-0103.md) of a specific credential issuer party `issuer`. It is self-published by the `issuer` party (issuer = holder = `issuer`) in the Splice Credential Registry, with the claim subject being the textual representation of `issuer`'s party-id. The idea is that the users' wallets read the user's credentials from their node, and then query the Splice Credential Registry using `cip-tbd/credential-issuer-app-url` to discover the URL for the issuer-specific dApp to manage the user's credentials. We expect the wallet UI to offer a redirect to that dApp. Such redirects may add a `credential-cid=<contract-id>` query parameter to the URL to focus on a particular credential. Whether to offer such a UI is optional for credential issuers.
-
-In general, the expectation is that all properties in a credential's claims have the form `namespace/property` and the namespaces are one of the following:
+The concrete claims to use in these credentials are usually defined in CIPs.
+This works without conflicts as we expect that the properties in a credential's claims have the form `namespace/property` and the namespaces are one of the following:
 
 1. `cip-<nr>`: for properties defined in a CIP
 2. `<dns-name>`: for properties defined by an organization that owns the DNS name `<dns-name>`. These namespaces can be freely used by organizations to define their own properties in a way that does not conflict with standardized properties from CIPs or properties defined by other organizations.
 
+The following sections show this approach in action.
 We expect future CIPs to define additional well-known properties for discovering applications and metadata of a particular kind.
+
+#### Discovering Credential Registries
+
+This CIP defines the property `cip-tbd/credential-registry-urls`.
+
+It serves to discover the off-ledger credential registry API of a specific credential registry admin party `registryAdmin`.
+It is published by `registryAdmin` using a self-published credential (issuer = holder = `registryAdmin`) in the Splice Credential Registry,
+whose claim subject is the textual representation of `registryAdmin`'s party-id.
+It specifies a comma-separated list of URL prefixes for party `registryAdmin`. Clients append the paths of the credential registry OpenAPI to them, as for the CIP-0056 registry URLs.
+Multiple URLs are supported for decentralized registries, so that clients can implement BFT reads.
+
+#### Discovering Credential Issuer Applications
+
+This CIP defines the property `cip-tbd/credential-issuer-app-url`.
+
+It serves to discover the [CIP-0103 dApp](../cip-0103/cip-0103.md) of a specific credential issuer party `issuer`. It is self-published by the `issuer` party (issuer = holder = `issuer`) in the Splice Credential Registry, with the claim subject being the textual representation of `issuer`'s party-id. The idea is that the users' wallets read the user's credentials from their node, and then query the Splice Credential Registry using `cip-tbd/credential-issuer-app-url` to discover the URL for the issuer-specific dApp to manage the user's credentials. We expect the wallet UI to offer a redirect to that dApp. Such redirects may add a `credential-cid=<contract-id>` query parameter to the URL to focus on a particular credential. Whether to offer such a UI is optional for credential issuers.
+
 
 #### Discovering CIP-0056 Registries
 
-Token Standard registries use the same mechanism to publish the URLs of their off-ledger APIs using the property `splice.lfdecentralizedtrust.org/registry-urls` defined in CIP-0056.
-This enables the automatic discovery of the off-ledger API URLs for token registries by wallets and apps as [described in CIP-0056](../cip-0056/cip-0056.md#off-ledger-api-discovery-and-access).
+The property `splice.lfdecentralizedtrust.org/registry-urls` is already defined in [CIP-0056](../cip-0056/cip-0056.md).
+
+It serves to discover the off-ledger API URLs of specific registries via a self-published credential in the Splice Credential Registry, with the claim subject being the textual representation of the registry admin party's party-id.
+This enables to actually implement the automatic discovery of the off-ledger API URLs for token registries by wallets and apps as [outlined in CIP-0056](../cip-0056/cip-0056.md#off-ledger-api-discovery-and-access).
 
 #### Discovering the Splice Credential Registry and Canton Coin Token Registry
 
@@ -376,6 +396,7 @@ This CIP solves application and service discovery on the Canton Network.
 
 Furthermore, this CIP also provides a foundation for publishing and discovering metadata about parties on the Canton Network.
 Therefore providing the building blocks for apps to improve their UX for displaying actors and counter-parties on the Canton Network.
+For example, a [party profile as proposed in this CIP by PixelPlex](https://github.com/canton-foundation/cips/pull/169).
 
 ## Rationale
 
