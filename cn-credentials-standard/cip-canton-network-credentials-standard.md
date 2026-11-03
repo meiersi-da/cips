@@ -411,9 +411,9 @@ e.g., using [party profiles as proposed in this CIP](https://github.com/canton-f
 
 ### Focus on Public Credentials Only
 
-This CIP covers credentials that can be discovered publicly. Public records are useful on their own, and they are how applications and explorers learn the shape of the network. Only public credentials can be indexed by explorers, and the bulk credential retrieval API is built for that ingest.
+This CIP covers only credentials that can be discovered publicly, as that is all that is required for its motivating use cases: application and metadata discovery. Public credentials also enable explorers to index the network, which is what the [Bulk Credential Retrieval API](#bulk-credential-retrieval-api) is built for.
 
-Private credentials are left to a future CIP. The `Credential_Get` choice already allows registries to restrict who can fetch a non-public credential, so that such a CIP can build on the interfaces defined here. That CIP would authenticate the users looking up credentials in a registry and return only the records those users are allowed to see. Standardizing access-control specifications on credentials published to a registry is a non-trivial effort. It is probably best done where the credential issuer and the registry are run by the same entity, so the registry can use custom rules for access control.
+Private credentials are left to a future CIP. The `Credential_Get` choice already allows registries to restrict who can fetch a non-public credential, so that such a CIP can build on the interfaces defined here. Standardizing access control for credentials published to a registry is a non-trivial effort, and is easiest where the credential issuer and the registry are run by the same entity, so that the registry can enforce issuer-specific access rules.
 
 ### Relationship to W3C Verifiable Credentials
 
@@ -424,49 +424,64 @@ This simplification is possible because the Daml ledger provides what proofs pro
 credential records are created with the on-ledger authorization of their issuer and holder
 (for registries following the SHOULD in the [Credential Factory Interface](#credential-factory-interface)),
 and their integrity is guaranteed by the ledger.
+
 Flat text triples also keep the lookup and indexing requirements for registries simple
 and make size limits easy to specify and enforce.
-Interoperability with full W3C Verifiable Credentials can be layered on top if needed,
-for example by carrying a serialized verifiable credential in a claim value or in the `meta` field.
+Interoperability with full W3C Verifiable Credentials can be standardized in a future CIP if needed.
+
+### No Self-Authenticating Credentials
+
+Self-authenticating credentials, where the validity of the credential can be verified solely based on its content and cryptographic proofs, are out of scope for this CIP.
+Instead, credential records carry on-ledger authorization: they are created with the authorization of both issuer and holder
+(for registries following the SHOULD in the [Credential Factory Interface](#credential-factory-interface)),
+and the ledger guarantees their integrity.
+
+Beyond that, the trust in a credential comes from the reputation and verification processes of the issuing party
+and the registry storing them.
+This greatly lowers the technical complexity and mirrors the trust model taken for token registries,
+whose `admin` party is trusted to manage the registry and its entries.
+Where required, decentralized parties and governance can be used to enhance trust and reduce reliance on a single entity,
+as done for example for the Splice Credential Registry.
+
+### No Standardized Credential Verification
+
+Whereas the previous section is about verifying the credential artifact itself,
+this section is about verifying the content of its claims.
+The standardization of such claim verification
+(e.g., checking that a party claiming an email address actually controls that email address)
+is intentionally left out of the scope of this CIP.
+It may be addressed in future CIPs.
+The ecosystem can also develop its own verification frameworks,
+with apps relying on specialized credential issuers that verify the claims they attest to.
+
+### Validity Periods
+
+The standard supports credentials with an explicit validity period, given by `validFrom` and `validUntil`,
+so that they can be published ahead of time and have a limited time-to-live.
+Publishing them ahead of time simplifies operational workflows, for example, updating the HTTP server from which
+a token registry's off-ledger APIs are served.
+Using a limited time-to-live is a security best practice.
+The `effectiveOnly` flag of the [Credential Lookup API](#credential-lookup-api) lets clients
+retrieve only credentials whose validity period is currently effective.
+
+The record expiry time `expiresAt` is deliberately separate from `validUntil`:
+it reflects the registry's storage policy for the record,
+whereas the validity period is part of the credential's semantics as agreed between issuer and holder.
+This separation allows registries to expire and re-create records (e.g., for [paid extensions](#extended-expiration-durations))
+without changing the meaning of the credential.
 
 ### Last-Write-Wins Semantics for Duplicates
 
 Registries do not enforce uniqueness of `(issuer, holder, subject, property)` across credential records.
 Enforcing uniqueness on-ledger would introduce contention on credential creation and complicate
-workflows that intentionally re-create records, such as bulk updates via the `CredentialFactory`
-and [expiry extensions](#extended-expiration-durations).
+workflows that intentionally create duplicates, such as publishing forward dated credentials.
+
 Instead, duplicates are resolved deterministically at read time using last-write-wins semantics
 based on record time, as specified in [Handling Duplicates](#handling-duplicates).
 Record time is assigned by the synchronizer, so it provides an ordering that does not depend on
 clients trusting timestamps chosen by the writers of the records,
 and that explorers ingesting via the [Bulk Credential Retrieval API](#bulk-credential-retrieval-api) can reproduce.
 This keeps writes cheap and contention-free while still giving all clients a consistent view of which record is current.
-
-### No Self-Authenticating Credentials
-
-Self-authenticating credentials, where the validity of the credential can be verified solely based on its content and cryptographic proofs, are out of scope for this CIP.
-Instead, the trust in a credential comes from the reputation and verification processes of the issuing party
-and the registry storing them.
-This greatly lowers the technical complexity and mirrors the trust-model taken for token registries,
-whose `admin` party is trusted to manage the registry and its entries.
-Where required decentralized parties and governance can be used to enhance trust and reduce reliance on a single entity,
-as done for example for the Splice Credential Registry.
-
-### No Standardized Credential Verification
-
-The standardization of credential verification
-(e.g., checking that a party claiming an email address actually controls that email address)
-is intentionally left out of the scope of this CIP.
-It may be addressed in future CIPs.
-There is also the option for the ecosystem to develop their own verification frameworks where
-apps rely on specialized credential issuers that implement their own verification processes for the credentials they issue.
-
-### Effectively Dated Credentials
-
-The standard supports effectively dated credentials, so that they can be published ahead of time and have a limited time-to-live.
-Publishing them ahead of time simplifies operational workflows; e.g., updating the HTTP server from which
-a token registry's off-ledger APIs are served.
-Using a limited time-to-live is a security best practice.
 
 ## Backwards Compatibility
 
