@@ -1,5 +1,5 @@
 <pre>
-  CIP: CIP TBD
+  CIP: TBD
   Layer: Daml
   Title: Canton Network Credentials Standard
   Author:
@@ -7,8 +7,16 @@
   License: CC0-1.0
   Status: Draft
   Type: Standards Track
-  Created: 2026-01-09
+  Created: 2026-11-03
 </pre>
+
+FIXME:
+- revisit "DSO Credential Registry" name
+- do we need metadata discovery?
+- show the two modification APIs as optional APIs with dashed arrows
+- adjust to multiple actors per credential fetch
+- split the HTTP APIs into the read-only HTTP API and the factory HTTP API, which is optional
+- revisit whether building the DSO registry as an extension of ANS is the right choice
 
 ## Abstract
 
@@ -25,13 +33,10 @@ The specification of this CIP consists of three parts:
    kinds of applications on the network and their metadata
    such as the off-ledger APIs of [CIP-56 asset registries](https://github.com/global-synchronizer-foundation/cips/blob/main/cip-0056/cip-0056.md#off-ledger-api-discovery-and-access).
 
-We provide details on each of these parts in the following subsections.
+We provide details on each of these parts in the following subsections
+after giving a high-level overview of the roles and interactions involved.
 
-## Credential Registry APIs
-
-The APIs are inspired by the [W3C Verifiable Credentials Data Model](https://www.w3.org/TR/vc-data-model-2.0/). This CIP uses them to store and look up credentials, and to discover the off-ledger APIs of a party. The discovery keys are specified in [Standardized Application and Metadata Discovery](#standardized-application-and-metadata-discovery).
-
-### Overview
+### High-Level Overview
 
 This standard is concerned with entities and apps acting in the following roles:
 
@@ -48,25 +53,39 @@ The following diagram shows how the APIs defined in this CIP mediate the interac
 
 ![Credentials lifecycle](images/credentials_lifecycle.png)
 
-As we can see, the APIs cover exactly the interaction between the different kinds of apps and credential registries. Credential holders use custom APIs and UIs to interact with credential issuers. App providers can use explorer-specific APIs for richer lookups, see [Rich Credential Lookup](#rich-credential-lookup). App users are not shown in the diagram as they do not directly interact with any of the APIs standardized in this CIP. They rely on the app provider making suitable choices with respect to how to use the standardized APIs to make use of credentials in the apps' UIs and on-ledger workflows.
+As we can see, the APIs cover the interaction between the different kinds of apps and credential registries.
+Standardized APIs are shown in blue and custom APIs are shown in black.
+Credential holders use custom APIs and UIs to interact with credential issuers. App providers can use explorer-specific APIs for richer lookups, see [Rich Credential Lookup](#rich-credential-lookup). App users are not shown in the diagram as they do not directly interact with any of the APIs standardized in this CIP. They rely on the app provider making suitable choices with respect to how to use the standardized APIs to make use of credentials in the apps' UIs and on-ledger workflows.
 
 The diagram does not show the [Credential Registry Info API](#credential-registry-info-api), which is used for extensibility. It allows apps interacting with the registry to figure out what standards the registry supports.
 
-In the following subsections, we specify the different APIs. We conclude with a specification of the decentralized credential registry implemented by the SVs.
+Note that there can be many credential registries in the network.
+One of them is the [DSO Credential Registry](#dso-credential-registry),
+which serves as a base credential registry for the network.
+It is for example used to [discover the other credential registries in the network](#standardized-application-and-metadata-discovery).
 
-### Daml APIs
+Note also that credential registries are not required to support third-party credential issuers.
+As explained below, the `CredentialFactory` API is an optional API.
+This enables a simpler deployment model of Credential Issuer apps where their one app
+serves the dual purpose of issuing credentials and serving the read-only Credential Registry APIs.
+
+### Credential Registry APIs
+
+#### Daml APIs
 
 The Daml APIs mediate the on-ledger interactions of the different applications with the credential registry. They consist of the mandatory implementation of the `Credential` interface and an optional implementation of the `CredentialFactory` interface. We explain them in the following two sections. We specify the expected usage of these APIs by credential issuers and wallets thereafter.
 
-#### Credential Interface
+##### Credential Interface
 
-The schema of credentials is defined by the following Daml code (copied from the [draft PR](https://github.com/hyperledger-labs/splice/pull/3416/changes#diff-808147bf36f1c087a42b92d67d2021c2ca203076cc0e3b6a31f2ccc60497a34d)):
+The data schema of credentials is inspired by the [W3C Verifiable Credentials Data Model](https://www.w3.org/TR/vc-data-model-2.0/).
+Concretely, it is defined by the following Daml code copied from the [reference implementation](#reference-implementation):
 
 ```haskell
 -- | A claim that is part of a credential.
 data Claim = Claim with
     subject : Optional Text
       -- ^ The subject of the claim.
+      --
       -- If not set, then the claim pertains to the holder of the credential.
       -- Implementations SHOULD leave it unset rather than set it to the holder.
       -- Subjects MUST only contain characters from [a-zA-Z0-9._:/-].
@@ -134,9 +153,9 @@ interface Credential where
     -- Callers SHOULD check that the fetched credential view matches their
     -- expectations, e.g., that it has the correct admin, holder and issuer.
     with
-      actor : Party
+      actors : [Party]
         -- ^ The party fetching the contract.
-    controller actor
+    controller actors
     do credential_publicFetchImpl this self arg
 
 data Credential_ArchiveAsHolderResult = Credential_ArchiveAsHolderResult with
@@ -150,31 +169,31 @@ data Credential_ArchiveAsHolderResult = Credential_ArchiveAsHolderResult with
 
 Credential registries MAY enforce limits on the credentials they store to avoid operational problems from overly large credentials. The limits are communicated to users via the [Credential Registry Info API](#credential-registry-info-api). See [DSO Credential Registry Limits](#dso-credential-registry-limits) for the concrete limits enforced by the DSO Credential Registry.
 
-#### Credential Factory Interface
+##### Credential Factory Interface
 
 The purpose of this API is to enable credential issuers and holders to *jointly* create, update, and archive credentials in a third-party credential registry. Each credential registry MUST document whose authorization it requires to create a credential, and SHOULD require the authorization of both issuer and holder. The DSO Credential Registry requires both. The specific workflows for obtaining this authorization and determining the claims of the credential are provided by the issuer and implemented in their credential issuance app.
 
 Implementing this API is optional for credential registries. They MAY decide to only support registry-internal workflows for creating credentials, and not offer third-party issuers the right to publish credentials to that registry.
 
-This API uses the factory pattern pioneered in CIP-56: the `CredentialFactory` Daml interface provides a choice `CredentialFactory_UpdateCredentials` that allows for a bulk update of credentials with the same issuer and holder. Each element of its `newCredentials` argument becomes one credential record with its claims and validity period. The choice takes `requestedAt`, the time when the creation of the new record was requested. Callers supply it so that implementations can compute expiry without `getTime`. Callers MUST set `requestedAt` in the past, and SHOULD set it close to ledger time, as implementations may compute expiry from it. A corresponding HTTP API endpoint allows retrieval of the context to call that choice.
+This API uses the factory pattern pioneered in [CIP-0056](../cip-0056/cip-0056.md): the `CredentialFactory` Daml interface provides a choice `CredentialFactory_UpdateCredentials` that allows for a bulk update of credentials with the same issuer and holder. Each element of its `newCredentials` argument becomes one credential record with its claims and validity period. A corresponding HTTP API endpoint allows retrieval of the context to call that choice.
 
 Specifications of these two interfaces can be found here:
 
 - [Splice/Api/Credential/RegistryV1.daml](https://github.com/hyperledger-labs/splice/pull/3416/changes#diff-808147bf36f1c087a42b92d67d2021c2ca203076cc0e3b6a31f2ccc60497a34d) (includes the data format of credentials)
 - [openapi/credential-registry-v1.yaml](https://github.com/hyperledger-labs/splice/pull/3416/changes#diff-a73145dfdb26770f01b5fc0a9f35c7c34f067584acb6ec16de7e82040df6f835)
 
-#### Expected App Usage of Daml APIs
+##### Expected App Usage of Daml APIs
 
 We expect applications that need to fetch credentials as part of their Daml workflows to use `Credential_PublicFetch`.
 We also expect wallets to be able to list all credentials held by their user by asking the user's validator node for all active contracts implementing the `Credential` interface. Wallets can let the user archive an unwanted credential using the `Credential_ArchiveAsHolder` choice. We also expect that wallets can let the user open the credential issuer's custom dApp for managing that credential. We expect them to be able to do so as explained in [Standardized Application and Metadata Discovery](#standardized-application-and-metadata-discovery).
 
 Note that apps and users that want to use credentials from a specific registry on-ledger must vet the DAR files of that credential registry.
 
-### Read-Only HTTP APIs
+#### Read-Only HTTP APIs
 
 Credential registries SHOULD serve the read-only HTTP APIs specified below.
 
-#### Credential Registry Info API
+##### Credential Registry Info API
 
 The purpose of the credential registry info API is twofold:
 
@@ -183,7 +202,7 @@ The purpose of the credential registry info API is twofold:
 
 The API is specified in [openapi/credential-registry-v1.yaml](https://github.com/hyperledger-labs/splice/pull/3416/changes#diff-a73145dfdb26770f01b5fc0a9f35c7c34f067584acb6ec16de7e82040df6f835).
 
-#### Credential Lookup API
+##### Credential Lookup API
 
 The credential lookup API serves queries of the form `(property, issuer?, holder?)`:
 
@@ -192,23 +211,29 @@ The credential lookup API serves queries of the form `(property, issuer?, holder
 
 The API returns the credential records that contain at least one claim with that property. This is all that is needed for the lookups in [Standardized Application and Metadata Discovery](#standardized-application-and-metadata-discovery), and it keeps the indexing overhead for credential registries small. Richer queries are left to network explorers, see [Rich Credential Lookup](#rich-credential-lookup).
 
-A draft API is specified in [openapi/credential-registry-v1.yaml](https://github.com/hyperledger-labs/splice/pull/3416/changes#diff-a73145dfdb26770f01b5fc0a9f35c7c34f067584acb6ec16de7e82040df6f835). The API MUST include the record time of the transaction that created the credential contract. Record time is the Canton protocol sequencing time of that transaction's confirmation request.
-
-Several records can match a query, and choosing among them is left to the client. Clients MAY implement last-write-wins semantics among the records with the same issuer and holder by selecting the record with the latest record time among those whose `expiresAt` is absent or has not passed. The API MAY return records whose `expiresAt` is in the past. If every record with that issuer and holder has an `expiresAt` in the past, the client does not select a winner. A client that needs a deterministic winner MAY break a tie on record time by selecting the record whose contract id is lexicographically smaller, using the contract-id string returned by the API. The API returns matches ordered by record time descending, then contract id ascending.
-
+The API is specified in [openapi/credential-registry-v1.yaml](https://github.com/hyperledger-labs/splice/pull/3416/changes#diff-a73145dfdb26770f01b5fc0a9f35c7c34f067584acb6ec16de7e82040df6f835).
 By default the API only returns the `CredentialView` of a credential. It optionally also includes the underlying contract so that it can be disclosed for usage in a Daml transaction that reads the credential.
 
-#### Bulk Credential Retrieval API
+###### Handling Duplicates
+
+The API returns the record time of the transaction that created the credential contract.
+Record time is the Canton protocol sequencing time of that transaction's confirmation request.
+It orders the results by record time descending, with contract id ascending as the tie-break.
+
+Clients that need to choose a single credential record can implement last-write-wins semantics by selecting the record with the latest record time among those whose validity period is effective, breaking ties by contract id.
+
+##### Bulk Credential Retrieval API
 
 The purpose of the bulk credential retrieval API is to enable network explorers to ingest all credentials of a registry as they are created, updated, and archived.
 
 The corresponding HTTP endpoints work by exposing the list of synchronizers which are used by the registry to store credentials, and then serving pages of create and archive events per synchronizer in ascending record time order, with contract id ascending as the tie-break. A registry MAY prune the events of records that were archived more than 7 days ago, so an explorer that falls further behind starts over and receives the current records without their pruned history.
 
-#### Rich Credential Lookup
+##### Rich Credential Lookup
 
-Network explorers MAY offer richer lookups than the credential lookup API, for example by property prefix, by several issuers, or by subject. They ingest credentials through the bulk credential retrieval API and build their own indexes. This CIP does not standardize such lookups, and the DSO Credential Registry does not serve them.
+Network explorers MAY offer richer lookups than the standardized [Credential Lookup API](#credential-lookup-api), for example by property prefix, by several issuers, or by subject.
+They ingest credentials through the [Bulk Credential Retrieval API](#bulk-credential-retrieval-api) and build their own indexes. This CIP does not standardize such lookups, and the DSO Credential Registry does not serve them.
 
-## DSO Credential Registry
+### DSO Credential Registry
 
 A decentralized credential registry is implemented as an extension of the Amulet Name Service (ANS) app, which implements CNS 1.0 and is run by the SV nodes.
 It implements all the APIs defined above side-by-side with the existing ANS 1.0 APIs.
@@ -218,7 +243,7 @@ Instead, the registry expires the records at the end of a free period, 90 days b
 so that the traffic cost of creating and renewing them covers their storage cost.
 This CIP does not define automatic renewal. To keep a record beyond its `expiresAt`, its issuer or holder extends it as described in [Extended Expiration Durations](#extended-expiration-durations). A transfer of zero CC adds only the free period.
 
-### Extended Expiration Durations
+#### Extended Expiration Durations
 
 The registry supports extending the expiration of an existing record, optionally by burning CC. The fee defaults to USD 1 per year and is configurable by SV voting.
 An extension archives the record and creates a replacement with the same claims, the same `createdAt`, and a new `expiresAt`:
@@ -244,7 +269,7 @@ The preparing app asks Scan for the choice context of this transfer. Scan's Toke
 
 Generic wallet send flows typically only let the user enter a receiver and a memo, so they cannot set `cip-tbd/credential-id` in `extraArgs.context`. This is a limitation of such user interfaces, not of the Token Standard: both V1 and V2 transfers carry `extraArgs.context`. An extension is therefore prepared by an app that knows the credential's contract id, e.g., the issuer's dApp discovered via `cip-tbd/credential-issuer-app-url`, or a wallet that offers a dedicated extension flow.
 
-### DSO Credential Registry Limits
+#### DSO Credential Registry Limits
 
 The DSO Credential Registry rejects records that are too large to index and serve from Scan. It does not validate claim content. Content checks are application-specific and would bind the registry to particular use cases.
 
@@ -257,7 +282,7 @@ A DSO credential record is accepted only if all of the following hold:
 
 The size limits are advertised via the [Credential Registry Info API](#credential-registry-info-api). Other registries MAY choose different limits.
 
-### Technical Details
+#### Technical Details
 
 The APIs are implemented as follows:
 
@@ -270,7 +295,7 @@ The APIs are implemented as follows:
 4. The SV app is extended with automation ensuring that there is exactly one `AnsCredentialRecord` self-published by the `dso` party, which announces the URLs of the Scan apps serving the off-ledger APIs of the DSO Credential Registry.
 5. The `splice-amulet` package adds `ExternalPartyAmuletRules_BurnAmulet`, which burns CC and returns its USD value. Scan's Token Standard handler selects the `AnsRules` factory for transfers to the credential-expiry receiver party.
 
-## Standardized Application and Metadata Discovery
+### Standardized Application and Metadata Discovery
 
 Together the APIs defined in this CIP and the DSO Credential Registry enable
 defining standard ways to discover applications and metadata about them.
@@ -297,7 +322,7 @@ In general, the expectation is that all properties in a credential's claims have
 
 We expect future CIPs to define additional well-known properties for discovering applications and metadata of a particular kind.
 
-### Discovering the DSO Credential Registry
+#### Discovering the DSO Credential Registry
 
 The above properties will be used to make the DSO Credential Registry discoverable by making the `dso` party publish a credential with issuer = holder = admin = `dso` and claim
 
@@ -338,7 +363,7 @@ This CIP is backwards compatible: it only adds functionality. Existing ANS 1.0 A
 
 We expect that a future CIP that standardizes CNS, potentially including identity verification, will be constructed so that CNS 1.0 entries are properly integrated, and so that existing name issuance and identity verification services can integrate into that unified system.
 
-## Implementation
+## Reference Implementation
 
 A draft of the HTTP and Daml APIs, and of the DSO Credential Registry, is in [this Splice PR](https://github.com/hyperledger-labs/splice/pull/3416). It includes `Splice.Api.Credential.RegistryV1`, `openapi/credential-registry-v1.yaml`, and the DSO templates `AnsCredentialRegistry` and `AnsCredentialRecord`. It does not implement `Credential` on `AnsEntry`.
 
