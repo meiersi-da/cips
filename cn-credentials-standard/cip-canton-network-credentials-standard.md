@@ -21,7 +21,7 @@ FIXME:
       - `/credential-standard/splice-api-credential-registry-update-v1.yaml` (modification)
     - then update all OpenAPI links in this CIP, which currently all point to the single `openapi/credential-registry-v1.yaml`
     - add the missing spec link for the [Bulk Credential Retrieval API](#bulk-credential-retrieval-api)
-      (note though that bulk retrieval is party of read-only API)
+      (note though that bulk retrieval is part of read-only API)
     - add the spec link for the factory context endpoint in [Credential Factory Interface](#credential-factory-interface)
   - move the Splice Credential Registry implementation out of ANS into a separate package/module (e.g., `Splice.Credentials`)
 
@@ -65,7 +65,7 @@ As we can see, the APIs cover the interaction between the different kinds of app
 Standardized APIs are shown in blue and custom APIs are shown in black.
 Credential holders use custom APIs and UIs to interact with credential issuers. App providers can use explorer-specific APIs for richer lookups, see [Rich Credential Lookup](#rich-credential-lookup). App users are not shown in the diagram as they do not directly interact with any of the APIs standardized in this CIP. They rely on the app provider making suitable choices with respect to how to use the standardized APIs to make use of credentials in the apps' UIs and on-ledger workflows.
 
-The diagram does not show the [Credential Registry Info API](#credential-registry-info-api), which is used for extensibility. It allows apps interacting with the registry to figure out what standards the registry supports.
+The diagram does not show the [Credential Registry Info API](#credential-registry-info-api), which is used for extensibility. It allows apps interacting with the registry to figure out what standards the registry supports and what limits it enforces.
 
 Note that there can be many credential registries in the network.
 One of them is the [Splice Credential Registry](#splice-credential-registry),
@@ -269,7 +269,7 @@ By default, there is no Canton Coin (CC) payment required for creating credentia
 Instead, the registry expires the records at the end of a free period of 90 days by default (configurable by SV voting),
 so that the traffic cost of creating and renewing them covers their storage cost.
 This CIP does not define automatic renewal. To keep a record beyond its `expiresAt`, its issuer and holder can either
-jointly renew it free of charge by re-creating it via the `CredentialFactory`, which results in a new `createdAt`,
+jointly renew it without burning CC by re-creating it via the `CredentialFactory`, which results in a new `createdAt`,
 or its issuer or holder can extend it by burning CC as described in [Extended Expiration Durations](#extended-expiration-durations).
 
 #### Extended Expiration Durations
@@ -279,13 +279,13 @@ The default fee is `1.0 USD/year` (configurable by SV voting).
 An extension archives the record and creates a replacement with the same claims, the same `createdAt`, and a new `expiresAt`.
 
 The holder or issuer can request such an extension on their own, as the extension does not change the claims of the credential.
-They do so by initiating a Token Standard transfer with:
+They do so by initiating a Token Standard transfer where:
 
-- `sender` equal to the `issuer` or `holder` of the credential to extend
-- `amount` is the amount of CC to burn
-- `receiver` must be equal to the party `cip-tbd_credential-manager::1220000000000000000000000000000000000000000000000000000000000000abcd`
-- `memo`: set to `cip-tbd/memo:request=extend-credential-expiry`
-- `extraArgs.context` must store the contract-id of the credential to be extended in `cip-tbd/credential-cid` as an `AV_ContractId`
+- `sender` is equal to the `issuer` or `holder` of the credential to extend
+- `amount` is equal to the amount of CC to burn
+- `receiver` is equal to the party `cip-tbd_credential-manager::1220000000000000000000000000000000000000000000000000000000000000abcd`
+- `memo` is equal to `cip-tbd/memo:request=extend-credential-expiry`
+- `extraArgs.context` stores the contract-id of the credential to be extended in `cip-tbd/credential-cid` as an `AV_ContractId`
 
 Note that setting the contract-id in `extraArgs.context` requires wallet apps to support this feature explicitly.
 
@@ -312,10 +312,12 @@ Content checks are application-specific and would bind the registry to particula
 A credential record is accepted by the Splice Credential Registry only if all of the following hold:
 
 - it contains at most 32 claims.
-- each claim property is at most 254 characters and each claim subject is at most 255 characters, so that a full party-id can appear as subject.
+- each claim property is at most 255 characters and each claim subject is at most 255 characters, so that a full party-id can appear as subject.
 - each claim value is at most 2047 characters.
-- if set, `validFrom` is not earlier than `createdAt`, and `validUntil` is later than both `createdAt` and any `validFrom`.
-- if `validUntil` is set, then `expiresAt` is not later than `validUntil`.
+- if both are set, `validUntil` is later than `validFrom`; and if set, `validUntil` is later than `createdAt`.
+  Note that `validFrom` may be earlier than `createdAt`, so that credentials can be registered even within their validity period.
+
+The registry sets the initial `expiresAt` to `createdAt` plus the free period, capped at `validUntil` if that is set.
 
 The size limits are advertised via the [Credential Registry Info API](#credential-registry-info-api). Other registries MAY choose different limits.
 
@@ -329,12 +331,13 @@ their purpose and expected usage.
 
 This CIP defines the following properties:
 
-- `cip-tbd/credential-registry-urls`: serves to discover the off-ledger credential registry API of a specific credential registry admin party `admin`.
-  It is published by `admin` using a self-published credential in the Splice Credential Registry.
-  It specifies a comma-separated list of URL prefixes for party `admin`. Clients append the paths of the credential registry OpenAPI to them, as for the CIP-0056 registry URLs.
+- `cip-tbd/credential-registry-urls`: serves to discover the off-ledger credential registry API of a specific credential registry admin party `registryAdmin`.
+  It is published by `registryAdmin` using a self-published credential (issuer = holder = `registryAdmin`) in the Splice Credential Registry,
+  whose claim subject is the textual representation of `registryAdmin`'s party-id.
+  It specifies a comma-separated list of URL prefixes for party `registryAdmin`. Clients append the paths of the credential registry OpenAPI to them, as for the CIP-0056 registry URLs.
   Multiple URLs are supported for decentralized registries, so that clients can implement BFT reads.
 
-- `cip-tbd/credential-issuer-app-url`: serves to discover the [CIP-0103 dApp](../cip-0103/cip-0103.md) of a specific credential issuer party `issuer`. It is self-published by the `issuer` party in the Splice Credential Registry. The idea is that the users' wallets read the user's credentials from their node, and then query the Splice Credential Registry using `cip-tbd/credential-issuer-app-url` to discover the URL for the issuer-specific dApp to manage the user's credentials. We expect the wallet UI to offer a redirect to that dApp. These redirects to this URL may specify a `credential-cid=<contract-id>` query parameter to focus on a particular credential. Whether to offer such a UI is optional for credential issuers.
+- `cip-tbd/credential-issuer-app-url`: serves to discover the [CIP-0103 dApp](../cip-0103/cip-0103.md) of a specific credential issuer party `issuer`. It is self-published by the `issuer` party (issuer = holder = `issuer`) in the Splice Credential Registry, with the claim subject being the textual representation of `issuer`'s party-id. The idea is that the users' wallets read the user's credentials from their node, and then query the Splice Credential Registry using `cip-tbd/credential-issuer-app-url` to discover the URL for the issuer-specific dApp to manage the user's credentials. We expect the wallet UI to offer a redirect to that dApp. Such redirects may add a `credential-cid=<contract-id>` query parameter to the URL to focus on a particular credential. Whether to offer such a UI is optional for credential issuers.
 
 In general, the expectation is that all properties in a credential's claims have the form `namespace/property` and the namespaces are one of the following:
 
@@ -378,9 +381,9 @@ Therefore providing the building blocks for apps to improve their UX for display
 
 ### Focus on Public Credentials Only
 
-This CIP covers credentials that can be discovered publicly. Public records are useful on their own, and they are how applications and explorers learn the shape of the network. Credentials MUST be public to be indexable by explorers. The bulk credential retrieval API is built for that ingest.
+This CIP covers credentials that can be discovered publicly. Public records are useful on their own, and they are how applications and explorers learn the shape of the network. Only public credentials can be indexed by explorers, and the bulk credential retrieval API is built for that ingest.
 
-Private credentials are left to a future CIP. That CIP would authenticate the users looking up credentials in a registry and return only the records those users are allowed to see. Standardizing access-control specifications on credentials published to a registry is a non-trivial effort. It is probably best done where the credential issuer and the registry are run by the same entity, so the registry can use custom rules for access control.
+Private credentials are left to a future CIP. The `Credential_Get` choice already allows registries to restrict who can fetch a non-public credential, so that such a CIP can build on the interfaces defined here. That CIP would authenticate the users looking up credentials in a registry and return only the records those users are allowed to see. Standardizing access-control specifications on credentials published to a registry is a non-trivial effort. It is probably best done where the credential issuer and the registry are run by the same entity, so the registry can use custom rules for access control.
 
 ### No Self-Authenticating Credentials
 
