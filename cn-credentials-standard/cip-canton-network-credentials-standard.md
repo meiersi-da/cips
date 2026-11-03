@@ -229,12 +229,13 @@ The API is specified in [openapi/credential-registry-v1.yaml](https://github.com
 
 ##### Credential Lookup API
 
-The credential lookup API serves queries of the form `(property, issuer?, holder?, subject?)`:
+The credential lookup API serves queries of the form `(property, issuer?, holder?)`:
 
 - `property` is required and matches the whole property of a claim, not a prefix.
-- `issuer`, `holder`, and `subject` are optional filters. They MUST be specified in order: a filter MAY only be specified if all filters before it are specified.
+- `issuer` and `holder` are optional filters. They MUST be specified in order: `holder` MAY only be specified if `issuer` is specified.
 
-The API returns the credential records with matching `issuer` and `holder` that contain a claim with matching `property` and `subject`.
+The API returns the credential records with matching `issuer` and `holder` that contain a claim with matching `property`.
+Filtering by subject is not supported; clients select the claims with the subjects they are interested in from the returned records.
 This is all that is needed for the lookups in [Standardized Application and Metadata Discovery](#standardized-application-and-metadata-discovery), and it keeps the indexing overhead for credential registries small. Richer queries are left to network explorers, see [Rich Credential Lookup](#rich-credential-lookup).
 
 The API is specified in [openapi/credential-registry-v1.yaml](https://github.com/hyperledger-labs/splice/pull/3416/changes#diff-a73145dfdb26770f01b5fc0a9f35c7c34f067584acb6ec16de7e82040df6f835).
@@ -247,7 +248,7 @@ Record time is the Canton protocol sequencing time of that transaction's confirm
 It orders the results with equal `property`, `issuer`, and `holder` by record time descending, with contract id ascending as the tie-break.
 
 Two credential records are duplicates if they have the same `issuer` and `holder`, and both contain a claim with the same `subject` and `property`.
-Clients that need to choose a single claim among duplicates can implement last-write-wins semantics by selecting the claim from the first record in the returned order whose validity period is effective,
+Clients that need to choose a single claim among duplicates can implement last-write-wins semantics by selecting the claim with the desired `subject` from the first record in the returned order that contains such a claim and whose validity period is effective,
 i.e., the record with the latest record time, breaking ties by the smallest contract id.
 
 The API MAY return records whose `expiresAt` has passed, but which the registry has not yet archived.
@@ -339,7 +340,7 @@ The size limits are advertised via the [Credential Registry Info API](#credentia
 Together the APIs defined in this CIP and the Splice Credential Registry enable
 defining standard ways to discover applications and metadata about them.
 It works by applications using self-published credentials in the Splice Credential Registry to advertise their capabilities and metadata, which can then be discovered by apps by querying the registry.
-Clients look up property `p` of party `X` with the [Credential Lookup API](#credential-lookup-api) query `(p, X, X, X)`.
+Clients look up property `p` of party `X` with the [Credential Lookup API](#credential-lookup-api) query `(p, X, X)` and select the claims whose subject is `X` or unset (referring to the holder `X`).
 
 The concrete claims to use in these credentials are usually defined in CIPs.
 This works without conflicts as we expect that the properties in a credential's claims have the form `namespace/property` and the namespaces are one of the following:
