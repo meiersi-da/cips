@@ -23,7 +23,8 @@ FIXME:
 
 ## Abstract
 
-Define standard APIs for storing, retrieving, and using credentials on the Canton Network.
+Define standard APIs for storing, retrieving, and using credentials on the Canton Network;
+and use these to solve application discovery and party metadata discovery on the Canton Network.
 
 ## Specification
 
