@@ -417,12 +417,29 @@ Private credentials are left to a future CIP. The `Credential_Get` choice alread
 
 ### No Self-Authenticating Credentials
 
-TODO
+Self-authenticating credentials, where the validity of the credential can be verified solely based on its content and cryptographic proofs, are out of scope for this CIP.
+Instead, the trust in a credential comes from the reputation and verification processes of the issuing party
+and the registry storing them.
+This greatly lowers the technical complexity and mirrors the trust-model taken for token registries,
+whose `admin` party is trusted to manage the registry and its entries.
+Where required decentralized parties and governance can be used to enhance trust and reduce reliance on a single entity,
+as done for example for the Splice Credential Registry.
 
 ### No Standardized Credential Verification
 
-TODO
+The standardization of credential verification
+(e.g., checking that a party claiming an email address actually controls that email address)
+is intentionally left out of the scope of this CIP.
+It may be addressed in future CIPs.
+There is also the option for the ecosystem to develop their own verification frameworks where
+apps rely on specialized credential issuers that implement their own verification processes for the credentials they issue.
 
+### Effectively Dated Credentials
+
+The standard supports effectively dated credentials, so that they can be published ahead of time and have a limited time-to-live.
+Publishing them ahead of time simplifies operational workflows; e.g., updating the HTTP server from which
+a token registry's off-ledger APIs are served.
+Using a limited time-to-live is a security best practice.
 
 ## Backwards Compatibility
 
