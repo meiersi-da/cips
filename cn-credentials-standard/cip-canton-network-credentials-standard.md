@@ -253,7 +253,7 @@ Two credential records are duplicates if they have the same `issuer` and `holder
 When querying with a fully specified query `(property, issuer, holder, subject)` and `effectiveOnly = true`, all returned records are duplicates of each other, and the first returned record is the one that should be used for last-write-wins semantics.
 
 For queries that are not fully specified, or that do not set `effectiveOnly`, clients must implement the last-write-wins semantics themselves.
-They can do so by selecting, for each group of duplicates, the claim from the first record of that group in the returned order whose validity period is effective.
+They can do so by selecting, for each group of duplicates, the claim from the first record of that group in the returned order whose validity period is effective at the time the query is served, as judged by the client's clock.
 
 The API MAY return records whose `expiresAt` has passed, but which the registry has not yet archived.
 Clients SHOULD ignore `expiresAt` when choosing a record, as it is the validity period given by `validFrom` and `validUntil` that determines whether a credential is effective.
@@ -315,11 +315,11 @@ newExpiresAt0     = max(expiresAt, transfer.requestedAt) + freePeriod + purchase
 newExpiresAt      = min(newExpiresAt0, validUntil)    -- only if validUntil is set
 ```
 
-where `transfer.requestedAt` is the wallet provided timestamp on the Token Standard transfer, which is checked to be in the past.
+where `transfer.requestedAt` is the wallet-provided timestamp on the Token Standard transfer, which is checked to be in the past.
 The registry rejects extension requests where `newExpiresAt` is not later than the current `expiresAt`,
 so that no CC is burned without effect.
 
-A paid extension also adds the free period, as that is de-facto covered by the traffic paid for the extension transaction.
+A paid extension also adds the free period, as that is de facto covered by the traffic paid for the extension transaction.
 
 #### Splice Credential Registry Limits
 
@@ -372,7 +372,6 @@ Multiple URLs are supported for decentralized registries, so that clients can im
 This CIP defines the property `cip-tbd/credential-issuer-app-url`.
 
 It serves to discover the [CIP-0103 dApp](../cip-0103/cip-0103.md) of a specific credential issuer party `issuer`. It is self-published by the `issuer` party (issuer = holder = `issuer`) in the Splice Credential Registry, with the claim subject being the textual representation of `issuer`'s party-id. The idea is that the users' wallets read the user's credentials from their node, and then query the Splice Credential Registry using `cip-tbd/credential-issuer-app-url` to discover the URL for the issuer-specific dApp to manage the user's credentials. We expect the wallet UI to offer a redirect to that dApp. Such redirects may add a `credential-cid=<contract-id>` query parameter to the URL to focus on a particular credential. Whether to offer such a UI is optional for credential issuers.
-
 
 #### Discovering CIP-0056 Registries
 
@@ -476,7 +475,7 @@ without changing the meaning of the credential.
 
 Registries do not enforce uniqueness of `(issuer, holder, subject, property)` across credential records.
 Enforcing uniqueness on-ledger would introduce contention on credential creation and complicate
-workflows that intentionally create duplicates, such as publishing forward dated credentials.
+workflows that intentionally create duplicates, such as publishing forward-dated credentials.
 
 Instead, duplicates are resolved deterministically at read time using last-write-wins semantics
 based on record time, as specified in [Handling Duplicates](#handling-duplicates).
@@ -505,6 +504,10 @@ The Splice Credential Registry is expected to be implemented as follows:
    as the lookup API only supports one query pattern.
 3. The Scan app proxy served by the validator app implements the same HTTP APIs, calling out to multiple Scan apps and comparing the results to implement BFT reads.
 
+## Changelog
+
+- 2026-11-03: Revised draft
+- 2026-01-09: Initial draft
 
 ## Copyright
 
