@@ -266,8 +266,10 @@ even if its `createdAt` is older than that of its duplicates.
 
 The purpose of the bulk credential retrieval API is to enable network explorers to ingest all credentials of a registry as they are created, updated, and archived.
 
-The corresponding HTTP endpoints work by exposing the list of synchronizers which are used by the registry to store credentials, and then serving pages of create and archive events per synchronizer in ascending record time order, with contract id ascending as the tie-break. A registry MAY prune the events of archived records once they are older than its retention window, which it advertises via the [Credential Registry Info API](#credential-registry-info-api).
+The corresponding HTTP endpoints work by exposing the list of synchronizers which are used by the registry to store credentials, and then serving pages of create and archive events per synchronizer in ascending record time order, with contract id ascending as the tie-break. A reassignment of a credential contract to a different synchronizer is served as an archive event on the source synchronizer and a create event on the target synchronizer. A registry MAY prune the events of archived records once they are older than its retention window, which it advertises via the [Credential Registry Info API](#credential-registry-info-api).
 An explorer that falls further behind than that window starts over and receives the current records without their pruned history.
+
+Registries SHOULD support a minimal retention window of 7 days to ensure that explorers can reliably ingest all credential events.
 
 ##### Rich Credential Lookup
 
