@@ -386,8 +386,8 @@ The above properties will be used to make the Splice Credential Registry and the
 
 | Subject | Property | Value |
 | --- | --- | --- |
-| holder | `cip-tbd/credential-registry-urls` | `<scan-url1>,...,<scan-urlN>` |
-| holder | `cip-tbd/credential-registry-urls` | `<scan-url1>,...,<scan-urlN>` |...,<scan-urlN>` |
+| `dso` | `cip-tbd/credential-registry-urls` | `<scan-url1>,...,<scan-urlN>` |
+| `dso` | `splice.lfdecentralizedtrust.org/registry-urls` | `<scan-url1>,...,<scan-urlN>` |
 
 The Scan URLs are the ones published per network here: [https://canton.foundation/sv-network-status/](https://canton.foundation/sv-network-status/).
 These URLs, or the Scan proxy of a validator node, serve as the bootstrap for discovery: clients use them to query the Splice Credential Registry.
@@ -414,6 +414,33 @@ e.g., using [party profiles as proposed in this CIP](https://github.com/canton-f
 This CIP covers credentials that can be discovered publicly. Public records are useful on their own, and they are how applications and explorers learn the shape of the network. Only public credentials can be indexed by explorers, and the bulk credential retrieval API is built for that ingest.
 
 Private credentials are left to a future CIP. The `Credential_Get` choice already allows registries to restrict who can fetch a non-public credential, so that such a CIP can build on the interfaces defined here. That CIP would authenticate the users looking up credentials in a registry and return only the records those users are allowed to see. Standardizing access-control specifications on credentials published to a registry is a non-trivial effort. It is probably best done where the credential issuer and the registry are run by the same entity, so the registry can use custom rules for access control.
+
+### Relationship to W3C Verifiable Credentials
+
+The data schema of credentials is inspired by the [W3C Verifiable Credentials Data Model](https://www.w3.org/TR/vc-data-model-2.0/),
+but is deliberately simpler: claims are flat `(subject, property, value)` text triples instead of JSON-LD graphs,
+and there is no embedded proof section.
+This simplification is possible because the Daml ledger provides what proofs provide in the W3C model:
+credential records are created with the on-ledger authorization of their issuer and holder
+(for registries following the SHOULD in the [Credential Factory Interface](#credential-factory-interface)),
+and their integrity is guaranteed by the ledger.
+Flat text triples also keep the lookup and indexing requirements for registries simple
+and make size limits easy to specify and enforce.
+Interoperability with full W3C Verifiable Credentials can be layered on top if needed,
+for example by carrying a serialized verifiable credential in a claim value or in the `meta` field.
+
+### Last-Write-Wins Semantics for Duplicates
+
+Registries do not enforce uniqueness of `(issuer, holder, subject, property)` across credential records.
+Enforcing uniqueness on-ledger would introduce contention on credential creation and complicate
+workflows that intentionally re-create records, such as bulk updates via the `CredentialFactory`
+and [expiry extensions](#extended-expiration-durations).
+Instead, duplicates are resolved deterministically at read time using last-write-wins semantics
+based on record time, as specified in [Handling Duplicates](#handling-duplicates).
+Record time is assigned by the synchronizer, so it provides an ordering that does not depend on
+clients trusting timestamps chosen by the writers of the records,
+and that explorers ingesting via the [Bulk Credential Retrieval API](#bulk-credential-retrieval-api) can reproduce.
+This keeps writes cheap and contention-free while still giving all clients a consistent view of which record is current.
 
 ### No Self-Authenticating Credentials
 
