@@ -1,5 +1,6 @@
 <pre>
   CIP: TBD
+    Note: all `cip-tbd` identifiers in this document are placeholders and should be replaced with the actual CIP number once assigned.
   Layer: Daml
   Title: Canton Network Credentials Standard
   Author:
@@ -17,6 +18,8 @@ FIXME:
 - adjust to multiple actors per credential fetch
 - split the HTTP APIs into the read-only HTTP API and the factory HTTP API, which is optional
 - revisit whether building the DSO registry as an extension of ANS is the right choice
+- double-check that registry app is compatible with the credentials format
+- consistent reference format for CIPs use the four 0000 digits, e.g., `CIP-0056` instead of `CIP-56`
 
 ## Abstract
 
@@ -239,39 +242,43 @@ A decentralized credential registry is implemented as an extension of the Amulet
 It implements all the APIs defined above side-by-side with the existing ANS 1.0 APIs.
 
 By default, there is no Canton Coin (CC) payment required for creating credential records in the registry.
-Instead, the registry expires the records at the end of a free period, 90 days by default (configurable by SV voting),
+Instead, the registry expires the records at the end of a free period 90 days by default (configurable by SV voting),
 so that the traffic cost of creating and renewing them covers their storage cost.
-This CIP does not define automatic renewal. To keep a record beyond its `expiresAt`, its issuer or holder extends it as described in [Extended Expiration Durations](#extended-expiration-durations). A transfer of zero CC adds only the free period.
+This CIP does not define automatic renewal. To keep a record beyond its `expiresAt`, its issuer or holder extends it as described in [Extended Expiration Durations](#extended-expiration-durations).
 
 #### Extended Expiration Durations
 
-The registry supports extending the expiration of an existing record, optionally by burning CC. The fee defaults to USD 1 per year and is configurable by SV voting.
+The registry supports extending the expiration of an existing record by burning CC.
+The default fee is `1.0 USD/year` (configurable by SV voting).
 An extension archives the record and creates a replacement with the same claims, the same `createdAt`, and a new `expiresAt`:
 
+The holder or issuer can request such an extension by initiating a Token Standard transfer with:
+
+- `sender` equal to the `issuer` or `holder` of the credential to extend
+- `amount` is the amount of CC to burn
+- `receiver` must be equal to the party `cip-tbd_credential-manager::1220000000000000000000000000000000000000000000000000000000000000abcd`
+- `memo`: set to `cip-tbd/memo:request=extend-credential-expiry`
+- `extraArgs.context` must store the contract-id of the credential to be extended in `cip-tbd/credential-cid` as an `AV_ContractId`
+
+Note that setting the contract-id in `extraArgs.context` requires wallet apps to support this feature explicitly.
+
+The new expiry time is computed as follows:
+
 ```text
-purchasedDuration = floor(USD value of the burned CC / yearly fee * 365) days
-newExpiresAt      = max(expiresAt, transfer.requestedAt) + freePeriod + purchasedDuration
-newExpiresAt      = min(newExpiresAt, validUntil)    -- only if validUntil is set
+purchasedDuration = floor(amount * coin price / yearly fee * 365) days
+newExpiresAt0     = max(expiresAt, transfer.requestedAt) + freePeriod + purchasedDuration
+newExpiresAt      = min(newExpiresAt0, validUntil)    -- only if validUntil is set
 ```
 
-`transfer.requestedAt` is the wallet timestamp on the Token Standard transfer, and it MUST already be in the past. A paid extension also adds the free period, as creating a second record would, because its traffic pays for it. Burned CC is not refunded, even when part of the purchased duration is lost to rounding or to the `validUntil` cap.
+where `transfer.requestedAt` is the wallet provided timestamp on the Token Standard transfer, which is checked to be in the past.
 
-`CredentialFactory_UpdateCredentials` creates a credential without burning CC. The new record's `createdAt` is that choice's `requestedAt`, and `expiresAt` is `requestedAt` plus the free period, capped by `validUntil`.
-
-Extending a credential is a Token Standard transfer on the `TransferFactory` implemented by `AnsRules`. The sender pays, and the issuer or the holder of the record authorizes the extension, so apps can extend credentials on their behalf:
-
-- `transfer.sender` pays the CC. On [Token Standard V2](https://github.com/global-synchronizer-foundation/cips/blob/main/cip-0112/cip-0112.md), `actors` MUST include the sender and the issuer or the holder, and the sender is a basic account: an `Account` whose owner is that party, with no provider and an empty account id. On V1 the sender is the only actor, so it MUST be the issuer or the holder.
-- `transfer.receiver` is the party `cip-tbd_credential-expiry::1220000000000000000000000000000000000000000000000000000000000000abcd`, or its basic account on V2. No participant hosts that party, so the factory omits it from the transfer's informees.
-- `transfer.amount` is the CC to burn. It MUST NOT be negative. If it is zero, the extension adds only the free period.
-- `extraArgs.context` carries `cip-tbd/credential-id` as an `AV_ContractId` of the record being extended.
-
-The preparing app asks Scan for the choice context of this transfer. Scan's Token Standard handler selects the `AnsRules` factory for a transfer to this receiver party. The app sets `cip-tbd/credential-id` on the context it submits. The factory burns the transferred CC, archives the record, and creates the replacement.
-
-Generic wallet send flows typically only let the user enter a receiver and a memo, so they cannot set `cip-tbd/credential-id` in `extraArgs.context`. This is a limitation of such user interfaces, not of the Token Standard: both V1 and V2 transfers carry `extraArgs.context`. An extension is therefore prepared by an app that knows the credential's contract id, e.g., the issuer's dApp discovered via `cip-tbd/credential-issuer-app-url`, or a wallet that offers a dedicated extension flow.
+A paid extension also adds the free period, as that is de-facto covered by the traffic paid for the extension transaction.
 
 #### DSO Credential Registry Limits
 
-The DSO Credential Registry rejects records that are too large to index and serve from Scan. It does not validate claim content. Content checks are application-specific and would bind the registry to particular use cases.
+The DSO Credential Registry rejects records that are too large to index and serve from Scan.
+It does not validate claim content.
+Content checks are application-specific and would bind the registry to particular use cases.
 
 A DSO credential record is accepted only if all of the following hold:
 
@@ -309,11 +316,9 @@ This CIP defines the following properties:
   It specifies a comma-separated list of URL prefixes for party `admin`. Clients append the paths of the credential registry OpenAPI to them, as for the CIP-56 registry URLs.
   Multiple URLs are supported for decentralized registries, so that clients can implement BFT reads.
 
-- `cip-tbd/credential-issuer-app-url`: serves to discover the dApp of a specific credential issuer party `issuer`. It is self-published by the `issuer` party in the DSO Credential Registry. The idea is that the users' wallets read the user's credentials from their node, and then query the DSO Credential Registry using `cip-tbd/credential-issuer-app-url` to discover the URL for the issuer-specific dApp to manage the user's credentials. We expect the wallet UI to offer a redirect to that dApp. These redirects to this URL may specify a `credential-contract-id=<contract-id>` query parameter to focus on a particular credential. Whether to offer such a UI is optional for credential issuers.
+- `cip-tbd/credential-issuer-app-url`: serves to discover the [CIP-0103 dApp](../cip-0103/cip-0103.md) of a specific credential issuer party `issuer`. It is self-published by the `issuer` party in the DSO Credential Registry. The idea is that the users' wallets read the user's credentials from their node, and then query the DSO Credential Registry using `cip-tbd/credential-issuer-app-url` to discover the URL for the issuer-specific dApp to manage the user's credentials. We expect the wallet UI to offer a redirect to that dApp. These redirects to this URL may specify a `credential-cid=<contract-id>` query parameter to focus on a particular credential. Whether to offer such a UI is optional for credential issuers.
 
-Clients look up these properties with both `issuer` and `holder` set to the party whose services they want to discover, and only use claims without a `subject`.
 
-CIP-56 registries can use the same mechanism to publish the URLs of their off-ledger APIs. Standardizing the property for that is left to an update of CIP-56.
 
 In general, the expectation is that all properties in a credential's claims have the form `namespace/property` and the namespaces are one of the following:
 
@@ -322,34 +327,35 @@ In general, the expectation is that all properties in a credential's claims have
 
 We expect future CIPs to define additional well-known properties for discovering applications and metadata of a particular kind.
 
-#### Discovering the DSO Credential Registry
+#### Discovering CIP-0056 Registries
 
-The above properties will be used to make the DSO Credential Registry discoverable by making the `dso` party publish a credential with issuer = holder = admin = `dso` and claim
+Token Standard registries use the same mechanism to publish the URLs of their off-ledger APIs using the key `splice.lfdecentralizedtrust.org/registry-urls` defined in CIP-0056.
+Thereby enabling the automatic discovery of the off-ledger API URLs for token registries by wallets and apps as [described in CIP-0056](../cip-0056/cip-0056.md#off-ledger-api-discovery-and-access).
 
-```text
-(property="cip-tbd/credential-registry-urls",
- value="<scan-url1>,...,<scan-urlN>")
-```
+#### Discovering the DSO Credential Registry and Canton Coin Token Registry
+
+The above properties will be used to make the DSO Credential Registry and the Canton Coin Token Registry discoverable by making the `dso` party publish a credential with issuer = holder = admin = `dso` and claims
+
+| Issuer | Holder | Subject | Property | Value |
+| --- | --- | --- | --- | --- |
+| `dso` | `dso` | `dso` | `cip-tbd/credential-registry-urls` | `<scan-url1>,...,<scan-urlN>` |
+| `dso` | `dso` | `dso` | `splice.lfdecentralizedtrust.org/registry-urls` | `<scan-url1>,...,<scan-urlN>` |
 
 in the DSO Credential Registry. The Scan URLs are the ones published per network here: [https://canton.foundation/sv-network-status/](https://canton.foundation/sv-network-status/).
 
 ## Motivation
 
-CIP-56 left a concrete gap: wallets discover the HTTP URL of a token registry from the registry `admin` party on a `Holding` only through a [workaround](https://github.com/global-synchronizer-foundation/cips/blob/main/cip-0056/cip-0056.md#storing-generic-metadata-in-cns-10-entries) that stores JSON in the description of a paid CNS entry of that party. Wallets need that URL to read token metadata and to transfer holdings. The same discovery problem appears for other off-ledger services bound to a party.
+There is no standardized way for application discovery on the Canton Network.
+This is for example becoming a problem for the growing set of token registries on the network,
+as the [approach to their off-ledger API discovery described in CIP-0056](../cip-0056/cip-0056.md#off-ledger-api-discovery-and-access)
+cannot yet been implemented.
+We also expect this service discovery problem to appear for other types of applications and services on the Canton Network.
+This CIP solves service discovery on the Canton Network.
 
-CIP-56 showed how to standardize foundational infrastructure APIs. This CIP applies that approach to credentials: standard APIs for storing, retrieving, and using them.
-
-The aim is common building blocks so credentials can be served in an interoperable fashion.
+Furthermore, this CIP also provides a foundation for publishing and discovering metadata about parties on the Canton Network.
+Therefore providing the building blocks for apps to improve their UX for displaying actors and counter-parties on the Canton Network.
 
 ## Rationale
-
-### Service Discovery / Runtime Application Composition
-
-The problem of service discovery on the Canton Network is about how to resolve the party-ids of application providers to the additional services (e.g., HTTP APIs or custom UIs) that apps and users can use to interact with the contracts from these app providers.
-
-A typical example is the problem of wallets having to resolve the registry `admin` party-id on `Holding` contracts owned by their user to the [URL of the off-ledger registry API](https://github.com/global-synchronizer-foundation/cips/blob/main/cip-0056/cip-0056.md#off-ledger-api-discovery-and-access). The wallet needs to know this URL to read token metadata like total supply and to get the required data for transferring `Holding`s.
-
-As shown in [Discovering the DSO Credential Registry](#discovering-the-dso-credential-registry), storing the URLs of services associated with a party under a well-known claim in a self-published credential in the DSO Credential Registry solves this problem.
 
 ### Focus on Public Credentials Only
 
@@ -357,17 +363,23 @@ This CIP covers credentials that can be discovered publicly. Public records are 
 
 Private credentials are left to a future CIP. That CIP would authenticate the users looking up credentials in a registry and return only the records those users are allowed to see. Standardizing access-control specifications on credentials published to a registry is a non-trivial effort. It is probably best done where the credential issuer and the registry are run by the same entity, so the registry can use custom rules for access control.
 
+### No Self-Authenticating Credentials
+
+TODOO
+
+### No Standardized Credential Verification
+
+TODO
+
+
 ## Backwards Compatibility
 
-This CIP is backwards compatible: it only adds functionality. Existing ANS 1.0 APIs stay. The `Credential` interface is additive. A later CIP may implement it on existing `AnsEntry` contracts. The `AnsEntry` issuance workflows from ANS 1.0 are not migrated in this CIP.
-
-We expect that a future CIP that standardizes CNS, potentially including identity verification, will be constructed so that CNS 1.0 entries are properly integrated, and so that existing name issuance and identity verification services can integrate into that unified system.
+This CIP is backwards compatible: it only adds functionality.
 
 ## Reference Implementation
 
-A draft of the HTTP and Daml APIs, and of the DSO Credential Registry, is in [this Splice PR](https://github.com/hyperledger-labs/splice/pull/3416). It includes `Splice.Api.Credential.RegistryV1`, `openapi/credential-registry-v1.yaml`, and the DSO templates `AnsCredentialRegistry` and `AnsCredentialRecord`. It does not implement `Credential` on `AnsEntry`.
+A draft of the HTTP and Daml APIs, and of the DSO Credential Registry, is available at [this Splice PR](https://github.com/hyperledger-labs/splice/pull/3416).
 
-Lookup pagination (`limit`, `pageToken`) is specified in that OpenAPI.
 
 ## Copyright
 
