@@ -91,10 +91,11 @@ Concretely, it is defined by the following Daml code copied from the [reference 
 ```haskell
 -- | A claim that is part of a credential.
 data Claim = Claim with
-    subject : Text
+    subject : Optional Text
       -- ^ The subject of the claim.
       --
-      -- Often set to the textual representation of the holder party-id of the credential.
+      -- If not set, then it refers to the holder of the credential,
+      -- which is the most common subject.
       --
       -- Subjects MUST only contain characters from [a-zA-Z0-9 ._:/-].
       -- Note that the space character is allowed as it is allowed in party names in Daml.
@@ -121,6 +122,8 @@ data CredentialView = CredentialView with
       -- ^ The party that holds the credential.
     claims : [Claim]
       -- ^ The claims of the credential.
+      --
+      -- Claims MUST be unique per `(subject, property)` pair within a credential.
     validFrom : Optional Time
       -- ^ The time from which this credential is valid.
     validUntil : Optional Time
@@ -320,6 +323,7 @@ Content checks are application-specific and would bind the registry to particula
 A credential record is accepted by the Splice Credential Registry only if all of the following hold:
 
 - it contains at most 32 claims.
+- its claims are unique per `(subject, property)` pair.
 - each claim property is at most 255 characters and each claim subject is at most 255 characters, so that a full party-id can appear as subject.
 - each claim value is at most 2047 characters.
 - if both are set, `validUntil` is later than `validFrom`; and if set, `validUntil` is later than `createdAt`.
@@ -377,8 +381,8 @@ The above properties will be used to make the Splice Credential Registry and the
 
 | Subject | Property | Value |
 | --- | --- | --- |
-| `dso` | `cip-tbd/credential-registry-urls` | `<scan-url1>,...,<scan-urlN>` |
-| `dso` | `splice.lfdecentralizedtrust.org/registry-urls` | `<scan-url1>,...,<scan-urlN>` |
+| holder | `cip-tbd/credential-registry-urls` | `<scan-url1>,...,<scan-urlN>` |
+| holder | `cip-tbd/credential-registry-urls` | `<scan-url1>,...,<scan-urlN>` |...,<scan-urlN>` |
 
 The Scan URLs are the ones published per network here: [https://canton.foundation/sv-network-status/](https://canton.foundation/sv-network-status/).
 These URLs, or the Scan proxy of a validator node, serve as the bootstrap for discovery: clients use them to query the Splice Credential Registry.
