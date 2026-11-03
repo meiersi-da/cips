@@ -12,8 +12,6 @@
 </pre>
 
 FIXME:
-- revisit "DSO Credential Registry" name
-  - better option: "gSync Credential Registry"; check it with Wayne
 - diagram: show the two modification APIs as optional APIs with dashed arrows
 - code:
   - adjust reference implementation to match code shown in here
@@ -21,9 +19,7 @@ FIXME:
     - preferred option: in splice repo
       - `/credential-standard/splice-api-credential-registry-v1.yaml`
       - `/credential-standard/splice-api-credential-registry-update-v1.yaml`
-  - revisit whether building the DSO registry as an extension of ANS is the right choice
-      - alternative is to add `Splice.Credentials` as a separate module rather than extending ANS
-        - might be simpler wrt dependencies and reasoning about the code
+  - move the Splice Credential Registry implementation out of ANS into a separate package/module (e.g., `Splice.Credentials`)
 - consistent reference format for CIPs use the four 0000 digits, e.g., `CIP-0056` instead of `CIP-56`
 
 ## Abstract
@@ -35,9 +31,9 @@ Define standard APIs for storing, retrieving, and using credentials on the Canto
 The specification of this CIP consists of three parts:
 
 1. **Credential Registry APIs**: defines standard APIs for storing, retrieving, and using Canton Network credentials.
-2. **DSO Credential Registry**: specifies how these APIs are implemented in a decentralized registry run across the SV nodes.
+2. **Splice Credential Registry**: specifies how these APIs are implemented in a decentralized registry run by the SV nodes as part of the Global Synchronizer. This registry serves as the base registry from which application discovery can start.
 3. **Standardized Application and Metadata Discovery**:
-   specifies how these APIs are used to standardize the discovery of specific
+   specifies how these APIs and the Splice Credential Registry are used to standardize the discovery of specific
    kinds of applications on the network and their metadata
    such as the off-ledger APIs of [CIP-56 asset registries](https://github.com/global-synchronizer-foundation/cips/blob/main/cip-0056/cip-0056.md#off-ledger-api-discovery-and-access).
 
@@ -55,7 +51,7 @@ This standard is concerned with entities and apps acting in the following roles:
 - **app providers**: entities that operate apps that retrieve and use credentials in their UIs and/or in their on-ledger workflows
 - **app users**: entities that use apps that use credentials
 
-Entities often act in multiple roles. For example, a [CIP-56 token administrator that self-publishes their off-ledger token registry URLs](https://github.com/global-synchronizer-foundation/cips/blob/main/cip-0056/cip-0056.md#off-ledger-api-discovery-and-access) to the DSO Credential Registry acts both as the credential issuer and the credential holder of the corresponding credential. The claim in the credential would associate the property `splice.lfdecentralizedtrust.org/registry-urls` to the actual URLs. Token Standard wallets are typical apps using credentials with that kind of property. They use them to resolve the admin party-ids encountered in tokens held by a wallet user to the [URLs to query to execute transfers and other actions](https://github.com/global-synchronizer-foundation/cips/blob/main/cip-0056/cip-0056.md#utxo-access-management).
+Entities often act in multiple roles. For example, a [CIP-56 token administrator that self-publishes their off-ledger token registry URLs](https://github.com/global-synchronizer-foundation/cips/blob/main/cip-0056/cip-0056.md#off-ledger-api-discovery-and-access) to the Splice Credential Registry acts both as the credential issuer and the credential holder of the corresponding credential. The claim in the credential associates the property `splice.lfdecentralizedtrust.org/registry-urls` to the actual URLs. Token Standard wallets are typical apps using credentials with that kind of property. They use them to resolve the admin party-ids encountered in tokens held by a wallet user to the [URLs to query to execute transfers and other actions](https://github.com/global-synchronizer-foundation/cips/blob/main/cip-0056/cip-0056.md#utxo-access-management).
 
 The following diagram shows how the APIs defined in this CIP mediate the interaction between the apps in the different roles. Arrows point from clients to servers of APIs.
 
@@ -68,7 +64,7 @@ Credential holders use custom APIs and UIs to interact with credential issuers. 
 The diagram does not show the [Credential Registry Info API](#credential-registry-info-api), which is used for extensibility. It allows apps interacting with the registry to figure out what standards the registry supports.
 
 Note that there can be many credential registries in the network.
-One of them is the [DSO Credential Registry](#dso-credential-registry),
+One of them is the [Splice Credential Registry](#splice-credential-registry),
 which serves as a base credential registry for the network.
 It is for example used to [discover the other credential registries in the network](#standardized-application-and-metadata-discovery).
 
@@ -184,11 +180,11 @@ data Credential_RevokeResult = Credential_RevokeResult with
   deriving (Eq, Show)
 ```
 
-Credential registries MAY enforce limits on the credentials they store to avoid operational problems from overly large credentials. The limits are communicated to users via the [Credential Registry Info API](#credential-registry-info-api). See [DSO Credential Registry Limits](#dso-credential-registry-limits) for the concrete limits enforced by the DSO Credential Registry.
+Credential registries MAY enforce limits on the credentials they store to avoid operational problems from overly large credentials. The limits are communicated to users via the [Credential Registry Info API](#credential-registry-info-api). See [Splice Credential Registry Limits](#splice-credential-registry-limits) for the concrete limits enforced by the Splice Credential Registry.
 
 ##### Credential Factory Interface
 
-The purpose of this API is to enable credential issuers and holders to *jointly* create, update, and archive credentials in a third-party credential registry. Each credential registry MUST document whose authorization it requires to create a credential, and SHOULD require the authorization of both issuer and holder. The DSO Credential Registry requires both. The specific workflows for obtaining this authorization and determining the claims of the credential are provided by the issuer and implemented in their credential issuance app.
+The purpose of this API is to enable credential issuers and holders to *jointly* create, update, and archive credentials in a third-party credential registry. Each credential registry MUST document whose authorization it requires to create a credential, and SHOULD require the authorization of both issuer and holder. The Splice Credential Registry requires both. The specific workflows for obtaining this authorization and determining the claims of the credential are provided by the issuer and implemented in their credential issuance app.
 
 Implementing this API is optional for credential registries. They MAY decide to only support registry-internal workflows for creating credentials, and not offer third-party issuers the right to publish credentials to that registry.
 
@@ -248,12 +244,12 @@ The corresponding HTTP endpoints work by exposing the list of synchronizers whic
 ##### Rich Credential Lookup
 
 Network explorers MAY offer richer lookups than the standardized [Credential Lookup API](#credential-lookup-api), for example by property prefix, by several issuers, or by subject.
-They ingest credentials through the [Bulk Credential Retrieval API](#bulk-credential-retrieval-api) and build their own indexes. This CIP does not standardize such lookups, and the DSO Credential Registry does not serve them.
+They ingest credentials through the [Bulk Credential Retrieval API](#bulk-credential-retrieval-api) and build their own indexes. This CIP does not standardize such lookups, and the Splice Credential Registry does not serve them.
 
-### DSO Credential Registry
+### Splice Credential Registry
 
-A decentralized credential registry is implemented as an extension of the Amulet Name Service (ANS) app, which implements CNS 1.0 and is run by the SV nodes.
-It implements all the APIs defined above side-by-side with the existing ANS 1.0 APIs.
+Splice adds a decentralized base credential registry that is run by the SV nodes as part of the Global Synchronizer.
+Its admin party is the `dso` party, and it implements all the APIs defined above.
 
 By default, there is no Canton Coin (CC) payment required for creating credential records in the registry.
 Instead, the registry expires the records at the end of a free period 90 days by default (configurable by SV voting),
@@ -288,13 +284,13 @@ where `transfer.requestedAt` is the wallet provided timestamp on the Token Stand
 
 A paid extension also adds the free period, as that is de-facto covered by the traffic paid for the extension transaction.
 
-#### DSO Credential Registry Limits
+#### Splice Credential Registry Limits
 
-The DSO Credential Registry rejects records that are too large to index and serve from Scan.
+The Splice Credential Registry rejects records that are too large to index and serve from Scan.
 It does not validate claim content.
 Content checks are application-specific and would bind the registry to particular use cases.
 
-A DSO credential record is accepted only if all of the following hold:
+A credential record is accepted by the Splice Credential Registry only if all of the following hold:
 
 - it contains at most 32 claims.
 - each claim property is at most 254 characters and each claim subject is at most 255 characters, so that a full party-id can appear as subject.
@@ -303,22 +299,10 @@ A DSO credential record is accepted only if all of the following hold:
 
 The size limits are advertised via the [Credential Registry Info API](#credential-registry-info-api). Other registries MAY choose different limits.
 
-#### Technical Details
-
-The APIs are implemented as follows:
-
-1. The `splice-amulet-name-service` package is extended as [shown in this PR](https://github.com/hyperledger-labs/splice/pull/3416/changes#diff-271a41476c5ed80c77cbe363f39cc58f5f422a6c9991cfc2fa2bd65398802d7e):
-   1. The `AnsCredentialRegistry` template implements `CredentialFactory`.
-   2. The `AnsCredentialRecord` template implements the `Credential` interface and serves to record credentials in the registry.
-   3. The `AnsRules` template implements the Token Standard `TransferFactory` (V1 and V2) to burn CC for [paid extensions](#extended-expiration-durations).
-2. The Scan app backend running on SV nodes implements the [openapi/credential-registry-v1.yaml](https://github.com/hyperledger-labs/splice/pull/3416/changes#diff-a73145dfdb26770f01b5fc0a9f35c7c34f067584acb6ec16de7e82040df6f835), so that any Scan app can be used to interact with the DSO Credential Registry.
-3. The Scan app proxy served by the validator app implements the [openapi/credential-registry-v1.yaml](https://github.com/hyperledger-labs/splice/pull/3416/changes#diff-a73145dfdb26770f01b5fc0a9f35c7c34f067584acb6ec16de7e82040df6f835), calling out to multiple Scan apps and comparing the results to implement BFT reads.
-4. The SV app is extended with automation ensuring that there is exactly one `AnsCredentialRecord` self-published by the `dso` party, which announces the URLs of the Scan apps serving the off-ledger APIs of the DSO Credential Registry.
-5. The `splice-amulet` package adds `ExternalPartyAmuletRules_BurnAmulet`, which burns CC and returns its USD value. Scan's Token Standard handler selects the `AnsRules` factory for transfers to the credential-expiry receiver party.
 
 ### Standardized Application and Metadata Discovery
 
-Together the APIs defined in this CIP and the DSO Credential Registry enable
+Together the APIs defined in this CIP and the Splice Credential Registry enable
 defining standard ways to discover applications and metadata about them.
 It works by a CIP defining claim properties within the CIP's namespace together with
 their purpose and expected usage.
@@ -326,13 +310,11 @@ their purpose and expected usage.
 This CIP defines the following properties:
 
 - `cip-tbd/credential-registry-urls`: serves to discover the off-ledger credential registry API of a specific credential registry admin party `admin`.
-  It is published by `admin` using a self-published credential in the DSO Credential Registry.
+  It is published by `admin` using a self-published credential in the Splice Credential Registry.
   It specifies a comma-separated list of URL prefixes for party `admin`. Clients append the paths of the credential registry OpenAPI to them, as for the CIP-56 registry URLs.
   Multiple URLs are supported for decentralized registries, so that clients can implement BFT reads.
 
-- `cip-tbd/credential-issuer-app-url`: serves to discover the [CIP-0103 dApp](../cip-0103/cip-0103.md) of a specific credential issuer party `issuer`. It is self-published by the `issuer` party in the DSO Credential Registry. The idea is that the users' wallets read the user's credentials from their node, and then query the DSO Credential Registry using `cip-tbd/credential-issuer-app-url` to discover the URL for the issuer-specific dApp to manage the user's credentials. We expect the wallet UI to offer a redirect to that dApp. These redirects to this URL may specify a `credential-cid=<contract-id>` query parameter to focus on a particular credential. Whether to offer such a UI is optional for credential issuers.
-
-
+- `cip-tbd/credential-issuer-app-url`: serves to discover the [CIP-0103 dApp](../cip-0103/cip-0103.md) of a specific credential issuer party `issuer`. It is self-published by the `issuer` party in the Splice Credential Registry. The idea is that the users' wallets read the user's credentials from their node, and then query the Splice Credential Registry using `cip-tbd/credential-issuer-app-url` to discover the URL for the issuer-specific dApp to manage the user's credentials. We expect the wallet UI to offer a redirect to that dApp. These redirects to this URL may specify a `credential-cid=<contract-id>` query parameter to focus on a particular credential. Whether to offer such a UI is optional for credential issuers.
 
 In general, the expectation is that all properties in a credential's claims have the form `namespace/property` and the namespaces are one of the following:
 
@@ -346,16 +328,17 @@ We expect future CIPs to define additional well-known properties for discovering
 Token Standard registries use the same mechanism to publish the URLs of their off-ledger APIs using the key `splice.lfdecentralizedtrust.org/registry-urls` defined in CIP-0056.
 Thereby enabling the automatic discovery of the off-ledger API URLs for token registries by wallets and apps as [described in CIP-0056](../cip-0056/cip-0056.md#off-ledger-api-discovery-and-access).
 
-#### Discovering the DSO Credential Registry and Canton Coin Token Registry
+#### Discovering the Splice Credential Registry and Canton Coin Token Registry
 
-The above properties will be used to make the DSO Credential Registry and the Canton Coin Token Registry discoverable by making the `dso` party publish a credential with issuer = holder = admin = `dso` and claims
+The above properties will be used to make the Splice Credential Registry and the Canton Coin Token Registry discoverable by making the `dso` party publish a credential in the Splice Credential Registry with issuer = holder = admin = `dso` and claims
 
-| Issuer | Holder | Subject | Property | Value |
-| --- | --- | --- | --- | --- |
-| `dso` | `dso` | `dso` | `cip-tbd/credential-registry-urls` | `<scan-url1>,...,<scan-urlN>` |
-| `dso` | `dso` | `dso` | `splice.lfdecentralizedtrust.org/registry-urls` | `<scan-url1>,...,<scan-urlN>` |
+| Subject | Property | Value |
+| --- | --- | --- |
+| `dso` | `cip-tbd/credential-registry-urls` | `<scan-url1>,...,<scan-urlN>` |
+| `dso` | `splice.lfdecentralizedtrust.org/registry-urls` | `<scan-url1>,...,<scan-urlN>` |
 
-in the DSO Credential Registry. The Scan URLs are the ones published per network here: [https://canton.foundation/sv-network-status/](https://canton.foundation/sv-network-status/).
+The Scan URLs are the ones published per network here: [https://canton.foundation/sv-network-status/](https://canton.foundation/sv-network-status/).
+The SV app takes care of creating and updating this credential as the Scan URLs change over time.
 
 ## Motivation
 
@@ -392,7 +375,19 @@ This CIP is backwards compatible: it only adds functionality.
 
 ## Reference Implementation
 
-A draft of the HTTP and Daml APIs, and of the DSO Credential Registry, is available at [this Splice PR](https://github.com/hyperledger-labs/splice/pull/3416).
+The HTTP and Daml APIs and the Daml code for the Splice Credential Registry is available at [this Splice PR](https://github.com/hyperledger-labs/splice/pull/3416).
+
+The Splice Credential Registry is expected to be implemented as follows:
+
+1. The Splice Daml code is changed so that there is:
+   1. A template that implements the `Credential` interface and serve to record credentials in the registry.
+   2. An implementation of the  `CredentialFactory`, so that issuers and holders can jointly publish credentials to the registry.
+   3. A modified Token Standard `TransferFactory` implementation that supports burning CC for [paid extensions](#extended-expiration-durations).
+2. The Scan app backend running on SV nodes implements both HTTP APIs,
+   so that any Scan app can be used to interact with the Splice Credential Registry.
+   The Scan app internally builds an index over all credentials in its backing Postgres DB.  A single index is sufficient,
+   as the lookup API only supports one query pattern.
+3. The Scan app proxy served by the validator app implements the same HTTP APIs, calling out to multiple Scan apps and comparing the results to implement BFT reads.
 
 
 ## Copyright
