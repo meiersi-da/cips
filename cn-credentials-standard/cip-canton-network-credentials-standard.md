@@ -15,6 +15,7 @@ FIXME:
 - diagram: show the two modification APIs as optional APIs with dashed arrows
 - code:
   - adjust reference implementation to match code shown in here
+  - adjust the OpenAPI spec of the [Credential Lookup API](#credential-lookup-api) to add the `effectiveOnly` flag
   - split the HTTP API definitions into the read-only HTTP API and the factory HTTP API, which is optional
     - preferred option: in splice repo
       - `/credential-standard/splice-api-credential-registry-v1.yaml` (read-only)
@@ -229,13 +230,14 @@ The API is specified in [openapi/credential-registry-v1.yaml](https://github.com
 
 ##### Credential Lookup API
 
-The credential lookup API serves queries of the form `(property, issuer?, holder?)`:
+The credential lookup API serves queries of the form `(property, issuer?, holder?, subject?)`:
 
 - `property` is required and matches the whole property of a claim, not a prefix.
-- `issuer` and `holder` are optional filters. They MUST be specified in order: `holder` MAY only be specified if `issuer` is specified.
+- `issuer`, `holder`, and `subject` are optional filters. They MUST be specified in order: a filter MAY only be specified if all filters before it are specified.
 
-The API returns the credential records with matching `issuer` and `holder` that contain a claim with matching `property`.
-Filtering by subject is not supported; clients select the claims with the subjects they are interested in from the returned records.
+It also supports a boolean flag `effectiveOnly` to return only records whose validity period is effective at the time the query is served.
+
+The API returns the credential records with matching `issuer` and `holder` that contain a claim with matching `property` and `subject`.
 This is all that is needed for the lookups in [Standardized Application and Metadata Discovery](#standardized-application-and-metadata-discovery), and it keeps the indexing overhead for credential registries small. Richer queries are left to network explorers, see [Rich Credential Lookup](#rich-credential-lookup).
 
 The API is specified in [openapi/credential-registry-v1.yaml](https://github.com/hyperledger-labs/splice/pull/3416/changes#diff-a73145dfdb26770f01b5fc0a9f35c7c34f067584acb6ec16de7e82040df6f835).
@@ -245,11 +247,13 @@ By default the API only returns the `CredentialView` of a credential. It optiona
 
 The API returns the record time of the transaction that created the credential contract.
 Record time is the Canton protocol sequencing time of that transaction's confirmation request.
-It orders the results with equal `property`, `issuer`, and `holder` by record time descending, with contract id ascending as the tie-break.
+The API orders the results with equal `property`, `issuer`, and `holder` by record time descending, with contract id ascending as the tie-break.
 
 Two credential records are duplicates if they have the same `issuer` and `holder`, and both contain a claim with the same `subject` and `property`.
-Clients that need to choose a single claim among duplicates can implement last-write-wins semantics by selecting the claim with the desired `subject` from the first record in the returned order that contains such a claim and whose validity period is effective,
-i.e., the record with the latest record time, breaking ties by the smallest contract id.
+When querying with a fully specified query `(property, issuer, holder, subject)` and `effectiveOnly = true`, all returned records are duplicates of each other, and the first returned record is the one that should be used for last-write-wins semantics.
+
+For queries that are not fully specified, or that do not set `effectiveOnly`, clients must implement the last-write-wins semantics themselves.
+They can do so by selecting, for each group of duplicates, the claim from the first record of that group in the returned order whose validity period is effective.
 
 The API MAY return records whose `expiresAt` has passed, but which the registry has not yet archived.
 Clients SHOULD ignore `expiresAt` when choosing a record, as it is the validity period given by `validFrom` and `validUntil` that determines whether a credential is effective.
@@ -340,7 +344,7 @@ The size limits are advertised via the [Credential Registry Info API](#credentia
 Together the APIs defined in this CIP and the Splice Credential Registry enable
 defining standard ways to discover applications and metadata about them.
 It works by applications using self-published credentials in the Splice Credential Registry to advertise their capabilities and metadata, which can then be discovered by apps by querying the registry.
-Clients look up property `p` of party `X` with the [Credential Lookup API](#credential-lookup-api) query `(p, X, X)` and select the claims whose subject is `X`.
+Clients look up property `p` of party `X` with the [Credential Lookup API](#credential-lookup-api) query `(p, X, X, X)`.
 
 The concrete claims to use in these credentials are usually defined in CIPs.
 This works without conflicts as we expect that the properties in a credential's claims have the form `namespace/property` and the namespaces are one of the following:
