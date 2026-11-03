@@ -13,13 +13,19 @@
 
 FIXME:
 - revisit "DSO Credential Registry" name
-- do we need metadata discovery?
-- show the two modification APIs as optional APIs with dashed arrows
-- adjust to multiple actors per credential fetch
-- split the HTTP APIs into the read-only HTTP API and the factory HTTP API, which is optional
-- revisit whether building the DSO registry as an extension of ANS is the right choice
-- double-check that registry app is compatible with the credentials format
+  - better option: "gSync Credential Registry"; check it with Wayne
+- diagram: show the two modification APIs as optional APIs with dashed arrows
+- code:
+  - adjust reference implementation to match code shown in here
+  - split the HTTP API definitions into the read-only HTTP API and the factory HTTP API, which is optional
+    - preferred option: in splice repo
+      - `/credential-standard/splice-api-credential-registry-v1.yaml`
+      - `/credential-standard/splice-api-credential-registry-update-v1.yaml`
+  - revisit whether building the DSO registry as an extension of ANS is the right choice
+      - alternative is to add `Splice.Credentials` as a separate module rather than extending ANS
+        - might be simpler wrt dependencies and reasoning about the code
 - consistent reference format for CIPs use the four 0000 digits, e.g., `CIP-0056` instead of `CIP-56`
+- double-check that registry app is compatible with the credentials format
 
 ## Abstract
 
