@@ -25,7 +25,6 @@ FIXME:
       - alternative is to add `Splice.Credentials` as a separate module rather than extending ANS
         - might be simpler wrt dependencies and reasoning about the code
 - consistent reference format for CIPs use the four 0000 digits, e.g., `CIP-0056` instead of `CIP-56`
-- double-check that registry app is compatible with the credentials format
 
 ## Abstract
 
@@ -92,12 +91,13 @@ Concretely, it is defined by the following Daml code copied from the [reference 
 ```haskell
 -- | A claim that is part of a credential.
 data Claim = Claim with
-    subject : Optional Text
+    subject : Text
       -- ^ The subject of the claim.
       --
-      -- If not set, then the claim pertains to the holder of the credential.
-      -- Implementations SHOULD leave it unset rather than set it to the holder.
-      -- Subjects MUST only contain characters from [a-zA-Z0-9._:/-].
+      -- Often set to the textual representation of the holder party-id of the credential.
+      --
+      -- Subjects MUST only contain characters from [a-zA-Z0-9 ._:/-].
+      -- Note that the space character is allowed as it is allowed in party names in Daml.
     property : Text
       -- ^ The property of the claim.
       --
@@ -135,6 +135,8 @@ data CredentialView = CredentialView with
       -- Separate from `validUntil`, as the expiry time of the
       -- credential record in the registry is determined by the registry policy and
       -- may differ from the validity period of the credential itself.
+    revokableBy : [[Party]]
+      -- ^ The groups of parties that are allowed to jointly revoke this credential.
     meta : Metadata
       -- ^ Metadata associated with this credential record. Used for extensibility.
   deriving (Eq, Show)
@@ -143,18 +145,24 @@ data CredentialView = CredentialView with
 interface Credential where
   viewtype CredentialView
 
-  credential_archiveAsHolderImpl : ContractId Credential -> Credential_ArchiveAsHolder -> Update Credential_ArchiveAsHolderResult
-  credential_publicFetchImpl : ContractId Credential -> Credential_PublicFetch -> Update CredentialView
+  credential_revokeImpl : ContractId Credential -> Credential_Revoke -> Update Credential_RevokeResult
+  credential_publicFetchImpl : ContractId Credential -> Credential_Get -> Update CredentialView
 
-  choice Credential_ArchiveAsHolder : Credential_ArchiveAsHolderResult
-    -- ^ Archive this credential record as the holder.
+  nonconsuming choice Credential_Revoke : Credential_RevokeResult
+    -- ^ Revoke this credential record.
     --
-    -- This is always allowed for the holder of the credential and matches the real-world analogue
-    -- of them destroying their copy of the credential.
-    controller (view this).holder
-    do credential_archiveAsHolderImpl this self arg
+    -- The choice is non-consuming to maximize implementation flexibility.
+    -- Implementations MUST ensure that the credential is properly revoked according to the registry's policy.
+    with
+      actors : [Party]
+        -- ^ The parties revoking the credential.
+        --
+        -- Registries SHOULD always allow the holder and issuer of the credential to revoke it.
+        -- Registries MAY impose additional restrictions on who can revoke a credential.
+    controller actors
+    do credential_revokeImpl this self arg
 
-  nonconsuming choice Credential_PublicFetch : CredentialView
+  nonconsuming choice Credential_Get : CredentialView
     -- ^ Fetch the view of the credential.
     --
     -- Registries MAY restrict the actor in case the credential is not public.
@@ -167,9 +175,9 @@ interface Credential where
     controller actors
     do credential_publicFetchImpl this self arg
 
-data Credential_ArchiveAsHolderResult = Credential_ArchiveAsHolderResult with
+data Credential_RevokeResult = Credential_RevokeResult with
     archivedCredential : CredentialView
-      -- ^ The view of the archived credential. It is returned for convenience
+      -- ^ The view of the revoked credential. It is returned for convenience
       -- so that the caller does not need to fetch it ahead of time.
     meta : Metadata
       -- ^ Additional metadata specific to the archive operation, used for extensibility.
@@ -193,8 +201,8 @@ Specifications of these two interfaces can be found here:
 
 ##### Expected App Usage of Daml APIs
 
-We expect applications that need to fetch credentials as part of their Daml workflows to use `Credential_PublicFetch`.
-We also expect wallets to be able to list all credentials held by their user by asking the user's validator node for all active contracts implementing the `Credential` interface. Wallets can let the user archive an unwanted credential using the `Credential_ArchiveAsHolder` choice. We also expect that wallets can let the user open the credential issuer's custom dApp for managing that credential. We expect them to be able to do so as explained in [Standardized Application and Metadata Discovery](#standardized-application-and-metadata-discovery).
+We expect applications that need to fetch credentials as part of their Daml workflows to use `Credential_Get`.
+We also expect wallets to be able to list all credentials held by their user by asking the user's validator node for all active contracts implementing the `Credential` interface. Wallets can let the user archive an unwanted credential using the `Credential_Revoke` choice. We also expect that wallets can let the user open the credential issuer's custom dApp for managing that credential. We expect them to be able to do so as explained in [Standardized Application and Metadata Discovery](#standardized-application-and-metadata-discovery).
 
 Note that apps and users that want to use credentials from a specific registry on-ledger must vet the DAR files of that credential registry.
 
