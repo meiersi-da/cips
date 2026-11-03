@@ -252,7 +252,7 @@ Splice adds a decentralized base credential registry that is run by the SV nodes
 Its admin party is the `dso` party, and it implements all the APIs defined above.
 
 By default, there is no Canton Coin (CC) payment required for creating credential records in the registry.
-Instead, the registry expires the records at the end of a free period 90 days by default (configurable by SV voting),
+Instead, the registry expires the records at the end of a free period of 90 days by default (configurable by SV voting),
 so that the traffic cost of creating and renewing them covers their storage cost.
 This CIP does not define automatic renewal. To keep a record beyond its `expiresAt`, its issuer or holder extends it as described in [Extended Expiration Durations](#extended-expiration-durations).
 
@@ -260,7 +260,7 @@ This CIP does not define automatic renewal. To keep a record beyond its `expires
 
 The registry supports extending the expiration of an existing record by burning CC.
 The default fee is `1.0 USD/year` (configurable by SV voting).
-An extension archives the record and creates a replacement with the same claims, the same `createdAt`, and a new `expiresAt`:
+An extension archives the record and creates a replacement with the same claims, the same `createdAt`, and a new `expiresAt`.
 
 The holder or issuer can request such an extension by initiating a Token Standard transfer with:
 
@@ -326,7 +326,7 @@ We expect future CIPs to define additional well-known properties for discovering
 #### Discovering CIP-0056 Registries
 
 Token Standard registries use the same mechanism to publish the URLs of their off-ledger APIs using the key `splice.lfdecentralizedtrust.org/registry-urls` defined in CIP-0056.
-Thereby enabling the automatic discovery of the off-ledger API URLs for token registries by wallets and apps as [described in CIP-0056](../cip-0056/cip-0056.md#off-ledger-api-discovery-and-access).
+This enables the automatic discovery of the off-ledger API URLs for token registries by wallets and apps as [described in CIP-0056](../cip-0056/cip-0056.md#off-ledger-api-discovery-and-access).
 
 #### Discovering the Splice Credential Registry and Canton Coin Token Registry
 
@@ -345,7 +345,7 @@ The SV app takes care of creating and updating this credential as the Scan URLs 
 There is no standardized way for application discovery on the Canton Network.
 This is for example becoming a problem for the growing set of token registries on the network,
 as the [approach to their off-ledger API discovery described in CIP-0056](../cip-0056/cip-0056.md#off-ledger-api-discovery-and-access)
-cannot yet been implemented.
+cannot yet be implemented.
 We also expect this service discovery problem to appear for other types of applications and services on the Canton Network.
 This CIP solves service discovery on the Canton Network.
 
@@ -362,7 +362,7 @@ Private credentials are left to a future CIP. That CIP would authenticate the us
 
 ### No Self-Authenticating Credentials
 
-TODOO
+TODO
 
 ### No Standardized Credential Verification
 
@@ -375,13 +375,13 @@ This CIP is backwards compatible: it only adds functionality.
 
 ## Reference Implementation
 
-The HTTP and Daml APIs and the Daml code for the Splice Credential Registry is available at [this Splice PR](https://github.com/hyperledger-labs/splice/pull/3416).
+The HTTP and Daml APIs and the Daml code for the Splice Credential Registry are available at [this Splice PR](https://github.com/hyperledger-labs/splice/pull/3416).
 
 The Splice Credential Registry is expected to be implemented as follows:
 
 1. The Splice Daml code is changed so that there is:
-   1. A template that implements the `Credential` interface and serve to record credentials in the registry.
-   2. An implementation of the  `CredentialFactory`, so that issuers and holders can jointly publish credentials to the registry.
+   1. A template that implements the `Credential` interface and serves to record credentials in the registry.
+   2. An implementation of the `CredentialFactory`, so that issuers and holders can jointly publish credentials to the registry.
    3. A modified Token Standard `TransferFactory` implementation that supports burning CC for [paid extensions](#extended-expiration-durations).
 2. The Scan app backend running on SV nodes implements both HTTP APIs,
    so that any Scan app can be used to interact with the Splice Credential Registry.
