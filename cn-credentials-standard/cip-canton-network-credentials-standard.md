@@ -133,6 +133,11 @@ data CredentialView = CredentialView with
       -- may differ from the validity period of the credential itself.
     revokableBy : [[Party]]
       -- ^ The groups of parties that are allowed to jointly revoke this credential.
+      --
+      -- The credential can be revoked by any one of these groups acting together.
+      -- Wallets are expected to use this field to determine whether their user
+      -- can call the `Credential_Revoke` choice on their own, i.e., whether
+      -- one of the groups consists only of the user's party.
     meta : Metadata
       -- ^ Metadata associated with this credential record. Used for extensibility.
   deriving (Eq, Show)
@@ -153,8 +158,8 @@ interface Credential where
       actors : [Party]
         -- ^ The parties revoking the credential.
         --
-        -- Registries SHOULD always allow the holder and issuer of the credential to revoke it.
-        -- Registries MAY impose additional restrictions on who can revoke a credential.
+        -- Registries MUST allow any group listed in `revokableBy` to revoke the credential.
+        -- Registries SHOULD include both the holder and the issuer individually in `revokableBy`.
     controller actors
     do credential_revokeImpl this self arg
 
@@ -198,7 +203,7 @@ Specifications of these two interfaces can be found here:
 ##### Expected App Usage of Daml APIs
 
 We expect applications that need to fetch credentials as part of their Daml workflows to use `Credential_Get`.
-We also expect wallets to be able to list all credentials held by their user by asking the user's validator node for all active contracts implementing the `Credential` interface. Wallets can let the user archive an unwanted credential using the `Credential_Revoke` choice. We also expect that wallets can let the user open the credential issuer's custom dApp for managing that credential. We expect them to be able to do so as explained in [Standardized Application and Metadata Discovery](#standardized-application-and-metadata-discovery).
+We also expect wallets to be able to list all credentials held by their user by asking the user's validator node for all active contracts implementing the `Credential` interface. Wallets can let the user archive an unwanted credential using the `Credential_Revoke` choice, provided the credential's `revokableBy` field contains a group consisting only of the user's party. We also expect that wallets can let the user open the credential issuer's custom dApp for managing that credential. We expect them to be able to do so as explained in [Standardized Application and Metadata Discovery](#standardized-application-and-metadata-discovery).
 
 Note that apps and users that want to use credentials from a specific registry on-ledger must vet the DAR files of that credential registry.
 
@@ -233,7 +238,12 @@ The API returns the record time of the transaction that created the credential c
 Record time is the Canton protocol sequencing time of that transaction's confirmation request.
 It orders the results by record time descending, with contract id ascending as the tie-break.
 
-Clients that need to choose a single credential record can implement last-write-wins semantics by selecting the record with the latest record time among those whose validity period is effective, breaking ties by contract id.
+Clients that need to choose a single credential record can implement last-write-wins semantics by selecting the first record in the returned order whose validity period is effective,
+i.e., the record with the latest record time, breaking ties by the smallest contract id.
+
+Note that operations that re-create a record, such as an [extension of its expiration](#extended-expiration-durations),
+produce a new contract with a new record time. Such a re-created record thus counts as the latest write,
+even if its `createdAt` is older than that of other records with the same property.
 
 ##### Bulk Credential Retrieval API
 
@@ -254,7 +264,9 @@ Its admin party is the `dso` party, and it implements all the APIs defined above
 By default, there is no Canton Coin (CC) payment required for creating credential records in the registry.
 Instead, the registry expires the records at the end of a free period of 90 days by default (configurable by SV voting),
 so that the traffic cost of creating and renewing them covers their storage cost.
-This CIP does not define automatic renewal. To keep a record beyond its `expiresAt`, its issuer or holder extends it as described in [Extended Expiration Durations](#extended-expiration-durations).
+This CIP does not define automatic renewal. To keep a record beyond its `expiresAt`, its issuer and holder can either
+jointly renew it free of charge by re-creating it via the `CredentialFactory`, which results in a new `createdAt`,
+or its issuer or holder can extend it by burning CC as described in [Extended Expiration Durations](#extended-expiration-durations).
 
 #### Extended Expiration Durations
 
