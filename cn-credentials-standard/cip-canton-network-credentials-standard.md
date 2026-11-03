@@ -13,6 +13,7 @@
 
 FIXME:
 - diagram: show the two modification APIs as optional APIs with dashed arrows
+  - also explain solids and dashed arrows in text
 - code:
   - adjust reference implementation to match code shown in here
   - adjust the OpenAPI spec of the [Credential Lookup API](#credential-lookup-api) to add the `effectiveOnly` flag
@@ -24,7 +25,11 @@ FIXME:
     - add the missing spec link for the [Bulk Credential Retrieval API](#bulk-credential-retrieval-api)
       (note though that bulk retrieval is part of read-only API)
     - add the spec link for the factory context endpoint in [Credential Factory Interface](#credential-factory-interface)
-  - move the Splice Credential Registry implementation out of ANS into a separate package/module (e.g., `Splice.Credentials`)
+  - move the Splice Credential Registry implementation out of ANS into a separate package/module
+    - preferred option move it into `splice-amulet`, we we can also use Credentials for splice-amulet related
+      functionality should we ever want to do so
+      - ==> move the code into `Splice.Credentials` within the `splice-amulet` package/module
+
 
 ## Abstract
 
