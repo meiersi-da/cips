@@ -20,7 +20,6 @@ FIXME:
       - `/credential-standard/splice-api-credential-registry-v1.yaml`
       - `/credential-standard/splice-api-credential-registry-update-v1.yaml`
   - move the Splice Credential Registry implementation out of ANS into a separate package/module (e.g., `Splice.Credentials`)
-- consistent reference format for CIPs use the four 0000 digits, e.g., `CIP-0056` instead of `CIP-56`
 
 ## Abstract
 
@@ -35,7 +34,7 @@ The specification of this CIP consists of three parts:
 3. **Standardized Application and Metadata Discovery**:
    specifies how these APIs and the Splice Credential Registry are used to standardize the discovery of specific
    kinds of applications on the network and their metadata
-   such as the off-ledger APIs of [CIP-56 asset registries](https://github.com/global-synchronizer-foundation/cips/blob/main/cip-0056/cip-0056.md#off-ledger-api-discovery-and-access).
+   such as the off-ledger APIs of [CIP-0056 asset registries](../cip-0056/cip-0056.md#off-ledger-api-discovery-and-access).
 
 We provide details on each of these parts in the following subsections
 after giving a high-level overview of the roles and interactions involved.
@@ -51,7 +50,7 @@ This standard is concerned with entities and apps acting in the following roles:
 - **app providers**: entities that operate apps that retrieve and use credentials in their UIs and/or in their on-ledger workflows
 - **app users**: entities that use apps that use credentials
 
-Entities often act in multiple roles. For example, a [CIP-56 token administrator that self-publishes their off-ledger token registry URLs](https://github.com/global-synchronizer-foundation/cips/blob/main/cip-0056/cip-0056.md#off-ledger-api-discovery-and-access) to the Splice Credential Registry acts both as the credential issuer and the credential holder of the corresponding credential. The claim in the credential associates the property `splice.lfdecentralizedtrust.org/registry-urls` to the actual URLs. Token Standard wallets are typical apps using credentials with that kind of property. They use them to resolve the admin party-ids encountered in tokens held by a wallet user to the [URLs to query to execute transfers and other actions](https://github.com/global-synchronizer-foundation/cips/blob/main/cip-0056/cip-0056.md#utxo-access-management).
+Entities often act in multiple roles. For example, a [CIP-0056 token administrator that self-publishes their off-ledger token registry URLs](../cip-0056/cip-0056.md#off-ledger-api-discovery-and-access) to the Splice Credential Registry acts both as the credential issuer and the credential holder of the corresponding credential. The claim in the credential associates the property `splice.lfdecentralizedtrust.org/registry-urls` to the actual URLs. Token Standard wallets are typical apps using credentials with that kind of property. They use them to resolve the admin party-ids encountered in tokens held by a wallet user to the [URLs to query to execute transfers and other actions](../cip-0056/cip-0056.md#utxo-access-management).
 
 The following diagram shows how the APIs defined in this CIP mediate the interaction between the apps in the different roles. Arrows point from clients to servers of APIs.
 
@@ -311,7 +310,7 @@ This CIP defines the following properties:
 
 - `cip-tbd/credential-registry-urls`: serves to discover the off-ledger credential registry API of a specific credential registry admin party `admin`.
   It is published by `admin` using a self-published credential in the Splice Credential Registry.
-  It specifies a comma-separated list of URL prefixes for party `admin`. Clients append the paths of the credential registry OpenAPI to them, as for the CIP-56 registry URLs.
+  It specifies a comma-separated list of URL prefixes for party `admin`. Clients append the paths of the credential registry OpenAPI to them, as for the CIP-0056 registry URLs.
   Multiple URLs are supported for decentralized registries, so that clients can implement BFT reads.
 
 - `cip-tbd/credential-issuer-app-url`: serves to discover the [CIP-0103 dApp](../cip-0103/cip-0103.md) of a specific credential issuer party `issuer`. It is self-published by the `issuer` party in the Splice Credential Registry. The idea is that the users' wallets read the user's credentials from their node, and then query the Splice Credential Registry using `cip-tbd/credential-issuer-app-url` to discover the URL for the issuer-specific dApp to manage the user's credentials. We expect the wallet UI to offer a redirect to that dApp. These redirects to this URL may specify a `credential-cid=<contract-id>` query parameter to focus on a particular credential. Whether to offer such a UI is optional for credential issuers.
