@@ -1,9 +1,7 @@
 <pre>
   CIP: ?
-  Layer: Canton, Daml
   Title: Remove Free Traffic
-  Author:
-    Simon Meier
+  Author: Simon Meier
   Discussions-To: TODO
   Status: Draft
   Type: Tokenomics
@@ -13,165 +11,136 @@
 
 # Remove Free Traffic
 
+**Open items:**
+
+- TODO: confirm that traffic accounting handles a 7-day `burstWindow` and a `burstAmount` of 0.
+- TODO: measure the current traffic usage of ACS commitments and time-proofs from metrics.
+
 ## Abstract
 
-This CIP proposes the removal of free traffic in the Canton network.
-The current free traffic configuration grants each validator up to 200,000 bytes of free traffic per 20-minute window,
-which amounts to subsidizing each validator's traffic cost up to $864 per day.
+At the time of writing, every validator receives free base-rate traffic:
+a 200 KB burst that refills every 20 minutes.
+Across the current network of about 800 validators, this amounts to a subsidy of up to $0.7M per day.
 
-This subsidy solved an important bootstrapping problem for validator operators:
-purchasing traffic requires holding CC which in turn require operating a validator
-with a positive traffic balance.
-Given that nowadays CC wallets are widely available and
-traffic can be purchased with a token standard transfer to `splice_traffic-manager::1220000000000000000000000000000000000000000000000000000000000000abcd` this cyclic bootstrapping problem no longer exists.
+This CIP proposes to remove this subsidy to improve tokenomics.
+The removal is phased over four months, so that the ecosystem has time to adjust to the change.
 
-
-a simple transfer to
-the `splice_tra
-
-was important during the bootstrapping phase of the network when
-it was difficult for validator operators to purchase traffic for their validators.
-This difficult is no longer present since in
-
-
-
-This subsidy is
-
-The removal is motivated by
-
-
-This subsidy is neither sustainable with the growing number of validators
-nor is it required anymore.
-
-
-At 800 validators this amounts to a
-
-to subsidizing up to $0.7M per day (11.52 GB/day), assuming full usage.
-
-
-
-Free traffic currently allows
-
-validators to consume a certain amount of network traffic without incurring costs.
-While this was initially introduced to facilitate bootstrapping and ease of use,
-it has led to subsidy farming and misaligned incentives.
-By removing free traffic,
-all network participants will pay for the traffic they consume,
-ensuring fair compensation for validators
-and predictable costs for all parties.
-
-TODO: ~200 word summary. Cover:
-
-- what free traffic is today
-- what this CIP removes
-- how the previously free operations are paid for instead
-- validator operators can buy traffic from any token standard wallet (see [Buying Traffic](#buying-traffic))
 
 ## Specification
 
-### Overview
+Change `decentralizedSynchronizer.fees.baseRateTrafficLimits` in `AmuletConfig`
+in three steps, each enacted by a separate SV vote
+as specified in [Config Votes](#config-votes):
 
-TODO
+| When | `burstAmount` | `burstWindow` | Network-wide free traffic | Subsidy per day | Reduction vs. today |
+|---|---|---|---|---|---|
+| Today | 200 KB | 20 min | 11.52 GB/day | $691,200 | — |
+| +7 days | 200 KB | 6 hours | 640 MB/day | $38,400 | −94.4% (18×) |
+| +1 month | 200 KB | 7 days | 22.9 MB/day | $1,371 | −99.8% (504×) |
+| +4 months | 0 KB | 7 days | 0 MB/day | $0 | −100% |
 
-### Buying Traffic
+Times are measured from CIP acceptance.
+Figures assume 800 validators using their full free allowance at $60/MB.
 
-Validator operators can buy traffic for their validator
-(or any other synchronizer member)
-from any token standard wallet,
-without validator app automation,
-by making a CC transfer:
+### Config Votes
 
-- Receiver: the traffic purchase party (TODO: confirm final party ID)
-- Amount: the CC to spend on traffic
-- Memo: the `splice.lfdecentralizedtrust.org/reason` metadata value, of the form
-  `splice/memo:member-id=<member>&synchronizer-id=<synchronizer>&migration-id=<int>`
-  (optional: `forfeit-validator-reward-coupon=true|false`)
+Each step is enacted by a separate vote,
+proposed using the "*Set Amulet Rules Configuration*" vote proposal form.
+All other config values remain unchanged.
+The votes are created one week ahead of their effectivity date.
 
-The purchased traffic must be at least `minTopupAmount` bytes
-(currently `200000`, i.e. 0.2 MB, about $12 at $60/MB).
-See the [traffic documentation](https://github.com/canton-network/cf-docs/pull/1880/changes)
-for the exact format,
-price computation,
-and failure modes.
+**Step 1: +7 days after acceptance**
 
-TODO: link the final docs page once merged.
+- Set `decentralizedSynchronizer.fees.baseRateTrafficLimits.burstWindow`
+  from `1200000000` (20 min) to `21600000000` (6 hours).
+- Set the effective date to 7 days after CIP acceptance.
 
-### Replacing Free Traffic for Bootstrapping Workarounds
+**Step 2: +1 month after acceptance**
 
-TODO: for each category, specify who pays, how, and how much.
+- Set `decentralizedSynchronizer.fees.baseRateTrafficLimits.burstWindow`
+  from `21600000000` (6 hours) to `604800000000` (7 days).
+- Set the effective date to 1 month after CIP acceptance.
 
-- ACS commitments: TODO
-- Time-proofs: TODO
-  - Synchronizer fees paid by SVs: TODO
-- Topology transactions: TODO
+**Step 3: +4 months after acceptance**
 
-### Configuration Changes
-
-Remove the free base-rate traffic by setting in `AmuletConfig`:
-
-- `decentralizedSynchronizer.fees.baseRateTrafficLimits.burstAmount` from `200000` to `0`
-
-Leave `burstWindow` (`1200000000μs`),
-`extraTrafficPrice`,
-`readVsWriteScalingFactor`,
-and `minTopupAmount` unchanged.
-
-Validators then rely on [buying traffic](#buying-traffic)
-(top-up automation or a token standard transfer with a memo).
-
-TODO: confirm the traffic accounting accepts `burstAmount = 0`,
-and decide whether to phase the reduction in steps.
-
-### Roll-Out Plan
-
-TODO
+- Set `decentralizedSynchronizer.fees.baseRateTrafficLimits.burstAmount`
+  from `200000` to `0`.
+- Set the effective date to 4 months after CIP acceptance.
 
 ## Motivation
 
-Free traffic should be removed to stop subsidy farming,
-align incentives,
-and make charges predictable.
+Free traffic harms tokenomics in two ways:
 
-- **Stop farming the subsidy.**
-  Free traffic rewards participants for consuming it rather than for useful activity.
-  Removing it aligns incentives and avoids misincentives.
-- **It does not scale.**
-  Free traffic does not grow with the network,
-  but its cost does.
-  Its cost therefore scales with network size
-  and must eventually be zero.
-  - Current base rate: 200,000 bytes per 20 minutes,
-    i.e. 14.4 MB/day per validator,
-    worth $864/day at $60/MB.
-  - With ~800 validators this is up to ~$0.7M/day (11.52 GB/day),
-    assuming full usage.
-- **It was a workaround.**
-  Free traffic was introduced to solve bootstrapping issues for:
-  - ACS commitments
-  - time-proofs (and the related synchronizer fees paid by SVs)
-  - topology transactions
-- **Predictability.**
-  Participants should know how much they will be charged.
+- **Farming.**
+  Free traffic is used to submit transactions whose only purpose is to earn app rewards,
+  which converts the traffic subsidy into minted CC.
+  This is contrary to the goal of app rewards: to incentivize useful activity.
+- **Lost revenue.**
+  Transactions paid with free traffic burn no CC.
+  At full usage and 800 validators, the network forgoes up to $0.7M of burn per day.
+
+Both effects grow linearly with the number of validators and are thus exacerbated as the network scales.
+
 
 ## Rationale
 
-TODO
+### Prerequisites
 
-- Alternatives considered: TODO
+TODO: link to docs page: https://docs.canton.network/global-synchronizer/deployment/synchronizer-traffic#buying-traffic-with-a-token-standard-transfer
+
+Free traffic was introduced to solve a bootstrapping problem:
+buying traffic requires CC, and using CC requires traffic.
+This problem is now solved:
+
+- Any token standard wallet can buy traffic for a validator
+  with a CC transfer to the traffic purchase party.
+  The validator itself needs no traffic for this.
+- We expect validator operators to buy traffic
+  either from a wallet held with a wallet provider,
+  or from an exchange that supports withdrawals in the form of traffic purchases.
+
+TODO: recommendations for validator operators
+- enable top-up automation
+- keep CC for recovery in a wallet on a separate validator node, so you can send a TS transfer from there
+
+### Phased Rollout
+
+Lowering the refill rate rather than the burst amount
+preserves the bootstrapping backstop during the transition:
+200 KB is enough for a validator with no traffic left to buy more.
+The phasing over four months gives the ecosystem time to adjust,
+e.g., for validator operators to set up traffic purchases
+and for wallet providers and exchanges to support them.
+
+### Alternatives Considered
+
+- **Remove free traffic immediately.**
+  Rejected, as it gives the ecosystem no time to adjust.
+- **Lower the burst amount instead of the refill rate.**
+  Rejected, as validators with no traffic left could no longer buy more.
+
 
 ## Backwards compatibility
 
-TODO
+This CIP requires no code or Daml changes.
 
-- Impact on validators: TODO;
-  operators can buy traffic from any token standard wallet via a memo transfer,
-  see [Buying Traffic](#buying-traffic)
-- Impact on SVs: TODO
-- Impact on apps and wallets: TODO
+Validators pay for all traffic they send once free traffic is removed, in particular:
+
+- **ACS commitments and time-proofs.**
+  Both are sent at regular intervals.
+  ACS commitments are sent to each counter-participant,
+  so their cost grows with network size.
+- **Transfer preapprovals.**
+  [CIP-0119](../cip-0119/cip-0119.md) allows creating and renewing preapprovals
+  using only traffic, including free traffic.
+  After this CIP, this requires purchased traffic.
+
+Validators that do not buy traffic will be unable to submit transactions
+once free traffic is removed.
 
 ## Reference Implementation
 
-TODO
+Not required; the change is enacted via SV votes on `AmuletConfig`.
 
 ## Copyright
 
