@@ -15,6 +15,7 @@
 
 - TODO: confirm that traffic accounting handles a 7-day `burstWindow` and a `burstAmount` of 0.
 - TODO: measure the current traffic usage of ACS commitments and time-proofs from metrics.
+- TODO: change table to also show individual subsidies
 
 ## Abstract
 
@@ -84,45 +85,44 @@ Both effects grow linearly with the number of validators and are thus exacerbate
 
 ## Rationale
 
-### Prerequisites
-
-TODO: link to docs page: https://docs.canton.network/global-synchronizer/deployment/synchronizer-traffic#buying-traffic-with-a-token-standard-transfer
+### Bootstrapping Problem Solved
 
 Free traffic was introduced to solve a bootstrapping problem:
 buying traffic requires CC, and using CC requires traffic.
-This problem is now solved:
+This problem is now solved.
 
-- Any token standard wallet can buy traffic for a validator
-  with a CC transfer to the traffic purchase party.
-  The validator itself needs no traffic for this.
-- We expect validator operators to buy traffic
-  either from a wallet held with a wallet provider,
-  or from an exchange that supports withdrawals in the form of traffic purchases.
+Validator operators can bootstrap the traffic balance of a validator in two ways:
 
-TODO: recommendations for validator operators
-- enable top-up automation
-- keep CC for recovery in a wallet on a separate validator node, so you can send a TS transfer from there
+1. By purchasing traffic using one of their other validators that they operate.
+2. Through token standard wallets using a [token standard transfer to the special traffic purchase party](https://docs.canton.network/global-synchronizer/deployment/synchronizer-traffic#buying-traffic-with-a-token-standard-transfer).
+
+Given the wide availability of token standard wallets,
+we can reasonably assume that every validator operator can
+bootstrap their first validator through a token standard wallet.
+This assumptions also aligns well with the DoS protection proposed in CIP-0128,
+where every new validator must actually have a sufficient traffic balance to even connect to the network.
 
 ### Phased Rollout
 
 Lowering the refill rate rather than the burst amount
-preserves the bootstrapping backstop during the transition:
+keeps the current recovery path operational during the transition:
 200 KB is enough for a validator with no traffic left to buy more.
-The phasing over four months gives the ecosystem time to adjust,
-e.g., for validator operators to set up traffic purchases
-and for wallet providers and exchanges to support them.
+The phases are chosen for the following rationales:
 
-### Alternatives Considered
+- **Cut farming:**
+  7-days after acceptance 94% of the subsidy is removed,
+  while validators can still recover or bootstrap their free traffic balance within 6 hours.
+- **Call to action:**
+  1 month after acceptance,
+  the refill rate is reduced to take 7 days to refill their free traffic balance, signaling the upcoming removal and
+  urging operators to set up their traffic recovery strategy.
+  A backstop is kept for validators that are used infrequently: they can recover in 7 days without any action.
+- **Remove free traffic:**
+  4 months after acceptance, free traffic is completely removed.
 
-- **Remove free traffic immediately.**
-  Rejected, as it gives the ecosystem no time to adjust.
-- **Lower the burst amount instead of the refill rate.**
-  Rejected, as validators with no traffic left could no longer buy more.
+### Validator Operators Pay for Background Operations
 
-
-## Backwards compatibility
-
-This CIP requires no code or Daml changes.
+TODO: write this
 
 Validators pay for all traffic they send once free traffic is removed, in particular:
 
@@ -135,8 +135,26 @@ Validators pay for all traffic they send once free traffic is removed, in partic
   using only traffic, including free traffic.
   After this CIP, this requires purchased traffic.
 
+### Alternatives Considered
+
+- **Remove free traffic immediately.**
+  Rejected, as it gives the ecosystem no time to adjust.
+- **Lower the burst amount instead of the refill rate.**
+  Rejected, as validators with no traffic left could no longer buy more.
+- **Keep a small permanent free traffic allocation.**
+  Rejected, as it would undermine the goal of removing free traffic entirely.
+
+## Backwards compatibility
+
+This CIP requires no code or Daml changes.
+
 Validators that do not buy traffic will be unable to submit transactions
 once free traffic is removed.
+We recommend validator operators to:
+
+1. Enable the validator app's [top-up automation](https://docs.canton.network/global-synchronizer/deployment/synchronizer-traffic#buying-traffic-with-the-validator-app’s-top-up-automation) and maintain a sufficient CC balance on the validator to buy traffic when needed.
+2. Keep CC for recovery in a wallet hosted on a different validator,
+   so that they can buy traffic when their own validator has run out of traffic.
 
 ## Reference Implementation
 
