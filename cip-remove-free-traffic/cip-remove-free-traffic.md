@@ -15,7 +15,6 @@
 
 - TODO: confirm that traffic accounting handles a 7-day `burstWindow` and a `burstAmount` of 0.
 - TODO: measure the current traffic usage of ACS commitments and time-proofs from metrics.
-- TODO: change table to also show individual subsidies
 
 ## Abstract
 
@@ -33,22 +32,23 @@ Change `decentralizedSynchronizer.fees.baseRateTrafficLimits` in `AmuletConfig`
 in three steps, each enacted by a separate SV vote
 as specified in [Config Votes](#config-votes):
 
-| When | `burstAmount` | `burstWindow` | Network-wide free traffic | Subsidy per day | Reduction vs. today |
+| When | `burstAmount` | `burstWindow` | Free traffic per validator | Free traffic network-wide | Reduction vs. today |
 |---|---|---|---|---|---|
-| Today | 200 KB | 20 min | 11.52 GB/day | $691,200 | — |
-| +7 days | 200 KB | 6 hours | 640 MB/day | $38,400 | −94.4% (18×) |
-| +1 month | 200 KB | 7 days | 22.9 MB/day | $1,371 | −99.8% (504×) |
-| +4 months | 0 KB | 7 days | 0 MB/day | $0 | −100% |
+| Today | 200 KB | 20 min | 14.4 MB/day ($864) | 11.52 GB/day ($691,200) | — |
+| +7 days | 200 KB | 6 hours | 800 KB/day ($48) | 640 MB/day ($38,400) | −94.4% (18×) |
+| +1 month | 200 KB | 7 days | 28.6 KB/day ($1.71) | 22.9 MB/day ($1,371) | −99.8% (504×) |
+| +4 months | 0 KB | 7 days | 0 | 0 | −100% |
 
 Times are measured from CIP acceptance.
-Figures assume 800 validators using their full free allowance at $60/MB.
+Dollar amounts are the subsidy per day.
+We assume 800 validators using their full free allowance at $60/MB.
 
 ### Config Votes
 
 Each step is enacted by a separate vote,
 proposed using the "*Set Amulet Rules Configuration*" vote proposal form.
 All other config values remain unchanged.
-The votes are created one week ahead of their effectivity date.
+The votes are created one week ahead of their effective date.
 
 **Step 1: +7 days after acceptance**
 
@@ -93,38 +93,40 @@ This problem is now solved.
 
 Validator operators can bootstrap the traffic balance of a validator in two ways:
 
-1. By purchasing traffic using one of their other validators that they operate.
-2. Through token standard wallets using a [token standard transfer to the special traffic purchase party](https://docs.canton.network/global-synchronizer/deployment/synchronizer-traffic#buying-traffic-with-a-token-standard-transfer).
+1. By buying traffic from another validator that they operate.
+2. By using a token standard wallet to make a [token standard transfer to the traffic purchase party](https://docs.canton.network/global-synchronizer/deployment/synchronizer-traffic#buying-traffic-with-a-token-standard-transfer).
 
 Given the wide availability of token standard wallets,
 we can reasonably assume that every validator operator can
 bootstrap their first validator through a token standard wallet.
-This assumptions also aligns well with the DoS protection proposed in CIP-0128,
-where every new validator must actually have a sufficient traffic balance to even connect to the network.
+This assumption also aligns with the DoS protection proposed in [CIP-0128](https://github.com/canton-foundation/cips/pull/274),
+where a new validator must have a sufficient traffic balance to connect to the network.
 
 ### Phased Rollout
 
 Lowering the refill rate rather than the burst amount
 keeps the current recovery path operational during the transition:
 200 KB is enough for a validator with no traffic left to buy more.
-The phases are chosen for the following rationales:
+The phases are chosen as follows:
 
 - **Cut farming:**
-  7-days after acceptance 94% of the subsidy is removed,
-  while validators can still recover or bootstrap their free traffic balance within 6 hours.
+  7 days after acceptance, 94% of the subsidy is removed,
+  while validators can still recover or bootstrap their traffic balance within 6 hours.
 - **Call to action:**
   1 month after acceptance,
-  the refill rate is reduced to take 7 days to refill their free traffic balance, signaling the upcoming removal and
-  urging operators to set up their traffic recovery strategy.
-  A backstop is kept for validators that are used infrequently: they can recover in 7 days without any action.
+  the free traffic balance takes 7 days to refill.
+  This signals the upcoming removal
+  and urges operators to set up their traffic recovery strategy.
+  Validators that are used infrequently keep a backstop:
+  they can recover within 7 days without any action.
 - **Remove free traffic:**
   4 months after acceptance, free traffic is completely removed.
 
 ### Validator Operators Pay for Background Operations
 
-TODO: write this
-
-Validators pay for all traffic they send once free traffic is removed, in particular:
+Validators send some messages without any user action.
+Today, free traffic covers these messages for most validators.
+Once free traffic is removed, validator operators pay for them, in particular:
 
 - **ACS commitments and time-proofs.**
   Both are sent at regular intervals.
@@ -135,6 +137,10 @@ Validators pay for all traffic they send once free traffic is removed, in partic
   using only traffic, including free traffic.
   After this CIP, this requires purchased traffic.
 
+This is intended:
+validator operators are best placed to decide
+whether running their validator is worth its cost.
+
 ### Alternatives Considered
 
 - **Remove free traffic immediately.**
@@ -142,7 +148,8 @@ Validators pay for all traffic they send once free traffic is removed, in partic
 - **Lower the burst amount instead of the refill rate.**
   Rejected, as validators with no traffic left could no longer buy more.
 - **Keep a small permanent free traffic allocation.**
-  Rejected, as it would undermine the goal of removing free traffic entirely.
+  Rejected, as any free allocation remains a target for farming
+  and its cost grows with the number of validators.
 
 ## Backwards compatibility
 
@@ -150,9 +157,10 @@ This CIP requires no code or Daml changes.
 
 Validators that do not buy traffic will be unable to submit transactions
 once free traffic is removed.
-We recommend validator operators to:
+We recommend that validator operators:
 
-1. Enable the validator app's [top-up automation](https://docs.canton.network/global-synchronizer/deployment/synchronizer-traffic#buying-traffic-with-the-validator-app’s-top-up-automation) and maintain a sufficient CC balance on the validator to buy traffic when needed.
+1. Enable the validator app's [top-up automation](https://docs.canton.network/global-synchronizer/deployment/synchronizer-traffic#buying-traffic-with-the-validator-app’s-top-up-automation)
+   and maintain a sufficient CC balance on the validator to buy traffic when needed.
 2. Keep CC for recovery in a wallet hosted on a different validator,
    so that they can buy traffic when their own validator has run out of traffic.
 
