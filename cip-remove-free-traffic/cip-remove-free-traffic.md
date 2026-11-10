@@ -18,6 +18,8 @@
 - TODO: quantify the amount of farming going on
 - TODO: check the traffic cost of validator license updates;
   if material, consider keeping a small free allocation for them instead of setting `burstAmount` to 0.
+- TODO: quantify whether the increase in app rewards from cutting farming outweighs the interim ACS commitment cost
+  for validators with more than about 80 counter-participants during Phase 1.
 - TODO: determine exact upper bound (or change formulation)
 
 ## Abstract
@@ -163,8 +165,12 @@ while validators can still recover or bootstrap their traffic balance within 200
 The 200-minute refill covers about 1.44 MB/day,
 which pays for the ACS commitments to about 80 counter-participants
 (at 17,280 bytes per counter-participant per day, see [Free ACS Commitments](#free-acs-commitments)).
-Validators with more counter-participants will pay for part of their ACS commitments in this phase,
-but in return may profit from increased app rewards due to the 90% reduction in free traffic farming activity.
+Validators with more counter-participants will pay for part of their ACS commitments in this phase.
+These are typically the validators of apps with many users,
+which are also the ones whose app rewards are diluted most by farming.
+For them, the interim cost of their ACS commitments is expected to be outweighed
+by the increase in their app rewards resulting from the 90% reduction in free traffic farming activity.
+It is thus in their interest to cut farming early rather than wait for free ACS commitments to be rolled out.
 
 #### Phase 2: Remove Free Traffic
 
@@ -187,6 +193,10 @@ value and how long they should remain valid.
 
 - **Remove free traffic immediately.**
   Rejected, as it gives the ecosystem no time to adjust.
+- **Wait for free ACS commitments before reducing free traffic.**
+  Rejected, as farming would continue for months,
+  and the well-connected validators that bear the interim cost of their ACS commitments
+  are expected to gain more from cutting farming early than they pay.
 - **Lower the burst amount instead of the refill rate.**
   Rejected, as validators rely on the burst amount to handle traffic spikes as they occur during on-boarding or traffic recovery.
 - **Have validators pay for ACS commitments.**
