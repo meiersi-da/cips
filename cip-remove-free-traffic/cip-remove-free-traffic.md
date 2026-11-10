@@ -14,13 +14,14 @@
 **Open items:**
 
 - TODO: confirm that traffic accounting handles a `burstAmount` of 0.
-- TODO: validate the exact sizes of the ACS commitments and their cost during the reduced free traffic phase
-- TODO: quantify the amount of farming going on
+- TODO: validate the exact sizes of the ACS commitments and their cost during the reduced free traffic phase.
+- TODO: quantify the amount of farming going on.
 - TODO: check the traffic cost of validator license updates;
   if material, consider keeping a small free allocation for them instead of setting `burstAmount` to 0.
 - TODO: quantify whether the increase in app rewards from cutting farming outweighs the interim ACS commitment cost
   for validators with more than about 80 counter-participants during Phase 1.
-- TODO: determine exact upper bound (or change formulation)
+- TODO: determine the exact upper bound on the size of an ACS commitment message
+  (or change the formulation of the rate limit).
 
 ## Abstract
 
@@ -39,7 +40,6 @@ In exchange, ACS commitments become free but rate-limited,
 analogous to confirmation responses in [CIP-0104](../cip-0104/cip-0104.md),
 so that validators do not pay for this protocol-mandated background traffic.
 
-
 ## Specification
 
 ### Free Rate-Limited ACS Commitments
@@ -49,8 +49,8 @@ The Canton Protocol is changed so that ACS commitments become free:
 1. Change the sequencer to not charge traffic for ACS commitments.
 2. Rate limit the bytes of ACS commitments per validator node to prevent abuse.
 
-The rate limit is therefore expressed in bytes per commitment interval
-and calibrated to the upper bound of the size of one ACS commitment message (about 360 bytes on MainNet)
+The rate limit is expressed in bytes per commitment interval.
+It is calibrated to the upper bound on the size of one ACS commitment message (about 360 bytes on MainNet)
 multiplied by the number of active validators on the network.
 This allows every validator to send one ACS commitment per commitment interval
 to every active validator, but no more.
@@ -118,7 +118,6 @@ As explained in [Bootstrapping Problem Solved](#bootstrapping-problem-solved),
 this need is now covered by other means,
 so the subsidy has lost its justification while its costs remain.
 
-
 ## Rationale
 
 ### Bootstrapping Problem Solved
@@ -143,7 +142,8 @@ where a new validator must have a sufficient traffic balance to connect to the n
 Validators send ACS commitments at regular intervals (every 30 minutes) without any user action,
 one to each counter-participant.
 A single ACS commitment for a single counter-participant costs about 360 bytes,
-which amounts to 360 bytes * 48 = 17,280 bytes, i.e., about $1 per day per counter-participant.
+With 48 commitment intervals per day, this amounts to 360 bytes × 48 = 17,280 bytes,
+i.e., about $1 per day per counter-participant.
 
 Requiring validators to pay for ACS commitments would impose a non-trivial cost on them, especially for well-connected nodes with many counter-participants.
 Given that ACS commitments are required by the protocol, we propose to treat them like confirmation responses, i.e., as free and rate-limited traffic.
@@ -198,16 +198,15 @@ value and how long they should remain valid.
   and the well-connected validators that bear the interim cost of their ACS commitments
   are expected to gain more from cutting farming early than they pay.
 - **Lower the burst amount instead of the refill rate.**
-  Rejected, as validators rely on the burst amount to handle traffic spikes as they occur during on-boarding or traffic recovery.
+  Rejected, as validators rely on the burst amount to handle traffic spikes as they occur during onboarding or traffic recovery.
 - **Have validators pay for ACS commitments.**
   Rejected, as their cost grows with network size
   and would make running a well-connected validator expensive
   for traffic that is required by the protocol.
 - **Keep a small permanent free traffic allocation.**
-  Rejected, as any free allocation remains a target for farming
-  and it would still not scale to the actual cost of ACS commitments.
+  Rejected, as any free allocation remains a target for farming.
 
-## Backwards compatibility
+## Backwards Compatibility
 
 This CIP requires a Canton change to make ACS commitments free,
 but no Daml changes.
