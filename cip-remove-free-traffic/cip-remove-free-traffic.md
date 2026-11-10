@@ -20,10 +20,11 @@
 
 At the time of writing, every validator receives free base-rate traffic:
 a 200 KB burst that refills every 20 minutes.
-Across the current network of about active 800 validators, this amounts to a subsidy of up to $0.7M per day.
+Across the current network of about 800 active validators, this amounts to a subsidy of up to $0.7M per day.
 
 This CIP proposes to remove this subsidy to improve tokenomics.
-The removal is phased over four months, so that the ecosystem has time to adjust to the change.
+The removal is phased over four months, so that the ecosystem has time to adjust to the change:
+90% of the subsidy is removed 7 days after acceptance, and the rest after four months.
 In exchange, ACS commitments become free but rate-limited,
 analogous to confirmation responses in [CIP-0104](../cip-0104/cip-0104.md),
 so that validators do not pay for this protocol-mandated background traffic.
@@ -120,7 +121,7 @@ where a new validator must have a sufficient traffic balance to connect to the n
 
 Validators send ACS commitments at regular intervals (every 30 minutes) without any user action,
 one to each counter-participant.
-An single ACS commitment for a single counter-participant costs about 360 bytes (TODO: traffic cost),
+A single ACS commitment for a single counter-participant costs about 360 bytes,
 which amounts to 360 bytes * 48 = 17,280 bytes, i.e., about $1 per day per counter-participant.
 
 Requiring validators to pay for ACS commitments would impose a non-trivial cost on them, especially for well-connected nodes with many counter-participants.
@@ -143,22 +144,16 @@ while validators can still recover or bootstrap their traffic balance within 200
 The 200-minute refill covers about 1.44 MB/day,
 which pays for the ACS commitments to about 80 counter-participants
 (at 17,280 bytes per counter-participant per day, see [Free ACS Commitments](#free-acs-commitments)).
-Validators with more counter-participants already pay for part of their ACS commitments in this phase.
+Validators with more counter-participants will pay for part of their ACS commitments in this phase,
+but in return may profit from increased app rewards due to the 90% reduction in free traffic farming activity.
 
 #### Phase 2: Remove Free Traffic
 
 4 months after acceptance, free traffic is completely removed.
-This gives time to implement and roll out free ACS commitments,
+If free ACS commitments are not yet enabled on MainNet by then,
+the removal is delayed until they are.
+The motivation for the delay is to give time to implement and roll out free ACS commitments,
 and for validator operators to set up their traffic recovery strategy.
-The removal is contingent on free ACS commitments being enabled.
-
-#### Impact on Validators Using the Most Free Traffic
-
-The validators on MainNet that use the most free traffic
-are run by organizations that also receive app rewards.
-They are partially compensated for the loss of free traffic
-by the increase in their app rewards,
-as less farmed activity competes with theirs for app rewards.
 
 ### Validator Operators Pay for Transfer Preapprovals
 
@@ -166,7 +161,7 @@ as less farmed activity competes with theirs for app rewards.
 using only traffic, including free traffic.
 After this CIP, this requires purchased traffic.
 This is intended:
-validator operators are best placed to decide which preapprovals to provide
+validator operators are best placed to decide which preapprovals provide
 value and how long they should remain valid.
 
 ### Alternatives Considered
@@ -210,7 +205,3 @@ This CIP is licensed under CC0-1.0: [Creative Commons CC0 1.0 Universal](https:/
 ## Changelog
 
 - 2026-10-28: draft published
-
-## Appendix
-
-Query
