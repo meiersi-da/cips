@@ -157,20 +157,15 @@ The rollout has the two phases described below.
 
 #### Phase 1: Cut Farming
 
-7 days after acceptance, the refill window is extended from 20 minutes to 200 minutes,
-so that each validator gets 10× less free traffic per day.
-This removes 90% of the subsidy,
+Phase 1 sends a clear signal: farming free traffic stops paying off now, not in four months.
+7 days after acceptance, the refill window grows from 20 to 200 minutes.
+This cuts 90% of the subsidy,
 while validators can still recover or bootstrap their traffic balance within 200 minutes.
 
-The 200-minute refill covers about 1.44 MB/day,
-which pays for the ACS commitments to about 80 counter-participants
-(at 17,280 bytes per counter-participant per day, see [Free ACS Commitments](#free-acs-commitments)).
-Validators with more counter-participants will pay for part of their ACS commitments in this phase.
-These are typically the validators of apps with many users,
-which are also the ones whose app rewards are diluted most by farming.
-For them, the interim cost of their ACS commitments is expected to be outweighed
-by the increase in their app rewards resulting from the 90% reduction in free traffic farming activity.
-It is thus in their interest to cut farming early rather than wait for free ACS commitments to be rolled out.
+The remaining 1.44 MB/day covers the ACS commitments to about 80 counter-participants
+(see [Free ACS Commitments](#free-acs-commitments)).
+Validators with more counter-participants pay for the rest until free ACS commitments are live.
+These are typically app validators, which also gain the most from less farming.
 
 #### Phase 2: Remove Free Traffic
 
