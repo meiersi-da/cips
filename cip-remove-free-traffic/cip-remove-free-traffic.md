@@ -15,14 +15,22 @@
 
 - TODO: confirm that traffic accounting handles a `burstAmount` of 0.
 - TODO: validate the exact sizes of the ACS commitments and their cost during the reduced free traffic phase
+- TODO: quantify the amount of farming going on
+- TODO: check the traffic cost of validator license updates;
+  if material, consider keeping a small free allocation for them instead of setting `burstAmount` to 0.
+- TODO: determine exact upper bound (or change formulation)
 
 ## Abstract
 
 At the time of writing, every validator receives free base-rate traffic:
 a 200 KB burst that refills every 20 minutes.
 Across the current network of about 800 active validators, this amounts to a subsidy of up to $0.7M per day.
+This subsidy is farmed for app rewards, burns no CC,
+and grows with every validator added, which rewards running validators just to collect it.
 
-This CIP proposes to remove this subsidy to improve tokenomics.
+The original purpose of free traffic, bootstrapping a validator's traffic balance,
+is now served by token standard wallets.
+This CIP therefore proposes to remove this subsidy.
 The removal is phased over four months, so that the ecosystem has time to adjust to the change:
 90% of the subsidy is removed 7 days after acceptance, and the rest after four months.
 In exchange, ACS commitments become free but rate-limited,
@@ -37,11 +45,14 @@ so that validators do not pay for this protocol-mandated background traffic.
 The Canton Protocol is changed so that ACS commitments become free:
 
 1. Change the sequencer to not charge traffic for ACS commitments.
-2. Rate limit ACS commitments per validator node to prevent abuse.
+2. Rate limit the bytes of ACS commitments per validator node to prevent abuse.
 
-The rate limit is set such that every validator can submit one ACS
-commitment per commitment window per active validator on the network,
-where a validator counts as active if it has not fallen behind the sequencer pruning window
+The rate limit is therefore expressed in bytes per commitment interval
+and calibrated to the upper bound of the size of one ACS commitment message (about 360 bytes on MainNet)
+multiplied by the number of active validators on the network.
+This allows every validator to send one ACS commitment per commitment interval
+to every active validator, but no more.
+A validator counts as active if it has not fallen behind the sequencer pruning window
 (30 days, at the time of writing).
 
 ### Phased Removal of Free Traffic
@@ -85,17 +96,25 @@ are enabled on MainNet.
 
 ## Motivation
 
-Free traffic harms tokenomics in two ways:
+Free traffic harms tokenomics in three ways:
 
 - **Farming.**
   Free traffic is used to submit transactions whose only purpose is to earn app rewards,
   which converts the traffic subsidy into minted CC.
-  This is contrary to the goal of app rewards: to incentivize useful activity.
-- **Lost revenue.**
-  Transactions paid with free traffic burn no CC.
-  At full usage and 800 validators, the network forgoes up to $0.7M of burn per day.
+  This dilutes the rewards of apps that provide real utility
+  and runs against the goal of app rewards: to incentivize useful activity.
+- **Unpriced resource usage.**
+  Free traffic consumes sequencer capacity like paid traffic, but burns no CC.
+  At full usage and 800 validators, this is up to $0.7M per day of traffic that is not paid for.
+- **Sybil incentive.**
+  Every validator gets the same allowance,
+  so the subsidy grows linearly with the number of validators,
+  and running additional validators just to collect it pays off.
 
-Both effects grow linearly with the number of validators and are thus exacerbated as the network scales.
+Free traffic was introduced to bootstrap the traffic balance of new validators.
+As explained in [Bootstrapping Problem Solved](#bootstrapping-problem-solved),
+this need is now covered by other means,
+so the subsidy has lost its justification while its costs remain.
 
 
 ## Rationale
@@ -169,7 +188,7 @@ value and how long they should remain valid.
 - **Remove free traffic immediately.**
   Rejected, as it gives the ecosystem no time to adjust.
 - **Lower the burst amount instead of the refill rate.**
-  Rejected, as validators with no traffic left could no longer buy more.
+  Rejected, as validators rely on the burst amount to handle traffic spikes as they occur during on-boarding or traffic recovery.
 - **Have validators pay for ACS commitments.**
   Rejected, as their cost grows with network size
   and would make running a well-connected validator expensive
