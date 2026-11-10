@@ -14,13 +14,13 @@
 **Open items:**
 
 - TODO: confirm that traffic accounting handles a `burstAmount` of 0.
-- TODO: specify how the sequencer identifies ACS commitments and the rate limit applied to them.
+- TODO: validate the exact sizes of the ACS commitments and their cost during the reduced free traffic phase
 
 ## Abstract
 
 At the time of writing, every validator receives free base-rate traffic:
 a 200 KB burst that refills every 20 minutes.
-Across the current network of about 800 validators, this amounts to a subsidy of up to $0.7M per day.
+Across the current network of about active 800 validators, this amounts to a subsidy of up to $0.7M per day.
 
 This CIP proposes to remove this subsidy to improve tokenomics.
 The removal is phased over four months, so that the ecosystem has time to adjust to the change.
@@ -38,9 +38,10 @@ The Canton Protocol is changed so that ACS commitments become free:
 1. Change the sequencer to not charge traffic for ACS commitments.
 2. Rate limit ACS commitments per validator node to prevent abuse.
 
-As in [CIP-0104](../cip-0104/cip-0104.md#heuristic-implementation),
-the change is enabled by a dynamic synchronizer flag
-that the SV apps set once all SV nodes have upgraded their sequencers.
+The rate limit is set such that every validator can submit one ACS
+commitment per commitment window per active validator on the network,
+where a validator counts as active if it has not fallen behind the sequencer pruning window
+(30 days, at the time of writing).
 
 ### Phased Removal of Free Traffic
 
@@ -51,8 +52,8 @@ as specified in [Config Votes](#config-votes):
 | When | `burstAmount` | `burstWindow` | Free traffic per validator | Free traffic network-wide | Reduction vs. today |
 |---|---|---|---|---|---|
 | Today | 200 KB | 20 min | 14.4 MB/day ($864) | 11.52 GB/day ($691,200) | — |
-| +7 days | 200 KB | 6 hours | 800 KB/day ($48) | 640 MB/day ($38,400) | −94.4% (18×) |
-| +4 months | 0 KB | 6 hours | 0 | 0 | −100% |
+| +7 days | 200 KB | 200 min | 1.44 MB/day ($86.40) | 1.152 GB/day ($69,120) | −90% (10×) |
+| +4 months | 0 KB | 200 min | 0 | 0 | −100% |
 
 Times are measured from CIP acceptance.
 Dollar amounts are the subsidy per day.
@@ -68,7 +69,7 @@ The votes are created one week ahead of their effective date.
 **Step 1: +7 days after acceptance**
 
 - Set `decentralizedSynchronizer.fees.baseRateTrafficLimits.burstWindow`
-  from `1200000000` (20 min) to `21600000000` (6 hours).
+  from `1200000000` (20 min) to `12000000000` (200 min).
 - Set the effective date to 7 days after CIP acceptance.
 
 **Step 2: +4 months after acceptance**
@@ -115,40 +116,49 @@ bootstrap their first validator through a token standard wallet.
 This assumption also aligns with the DoS protection proposed in [CIP-0128](https://github.com/canton-foundation/cips/pull/274),
 where a new validator must have a sufficient traffic balance to connect to the network.
 
+### Free ACS Commitments
+
+Validators send ACS commitments at regular intervals (every 30 minutes) without any user action,
+one to each counter-participant.
+An single ACS commitment for a single counter-participant costs about 360 bytes (TODO: traffic cost),
+which amounts to 360 bytes * 48 = 17,280 bytes, i.e., about $1 per day per counter-participant.
+
+Requiring validators to pay for ACS commitments would impose a non-trivial cost on them, especially for well-connected nodes with many counter-participants.
+Given that ACS commitments are required by the protocol, we propose to treat them like confirmation responses, i.e., as free and rate-limited traffic.
+
 ### Phased Rollout
 
 Lowering the refill rate rather than the burst amount
 keeps the current recovery path operational during the transition:
 200 KB is enough for a validator with no traffic left to buy more.
-The phases are chosen as follows:
+The rollout has the two phases described below.
 
-- **Cut farming:**
-  7 days after acceptance, 94% of the subsidy is removed,
-  while validators can still recover or bootstrap their traffic balance within 6 hours.
-- **Remove free traffic:**
-  4 months after acceptance, free traffic is completely removed.
-  This gives time to implement and roll out free ACS commitments,
-  and for validator operators to set up their traffic recovery strategy.
-  The removal is contingent on free ACS commitments being enabled.
-  Until then, validators with more than about 15 counter-participants
-  already pay for part of their ACS commitments,
-  as the 6-hour refill covers only about 800 KB/day.
+#### Phase 1: Cut Farming
 
-### Free ACS Commitments
+7 days after acceptance, the refill window is extended from 20 minutes to 200 minutes,
+so that each validator gets 10× less free traffic per day.
+This removes 90% of the subsidy,
+while validators can still recover or bootstrap their traffic balance within 200 minutes.
 
-Validators send ACS commitments at regular intervals without any user action,
-one to each counter-participant.
-Their cost thus grows with network size:
-an SV connected to all 800 validators sends about 43.2 MB/day of commitments,
-which would cost $2,592/day,
-or about $3.24/day per counter-participant.
-Today, free traffic covers these costs for most validators.
+The 200-minute refill covers about 1.44 MB/day,
+which pays for the ACS commitments to about 80 counter-participants
+(at 17,280 bytes per counter-participant per day, see [Free ACS Commitments](#free-acs-commitments)).
+Validators with more counter-participants already pay for part of their ACS commitments in this phase.
 
-ACS commitments are required by the protocol, just like confirmation responses.
-We therefore make them free and rate-limited,
-following the same reasoning as [CIP-0104](../cip-0104/cip-0104.md) for confirmation responses.
+#### Phase 2: Remove Free Traffic
 
-Time-proofs, the other periodic background message, are no longer sent with the newest Canton protocol version.
+4 months after acceptance, free traffic is completely removed.
+This gives time to implement and roll out free ACS commitments,
+and for validator operators to set up their traffic recovery strategy.
+The removal is contingent on free ACS commitments being enabled.
+
+#### Impact on Validators Using the Most Free Traffic
+
+The validators on MainNet that use the most free traffic
+are run by organizations that also receive app rewards.
+They are partially compensated for the loss of free traffic
+by the increase in their app rewards,
+as less farmed activity competes with theirs for app rewards.
 
 ### Validator Operators Pay for Transfer Preapprovals
 
@@ -156,8 +166,8 @@ Time-proofs, the other periodic background message, are no longer sent with the 
 using only traffic, including free traffic.
 After this CIP, this requires purchased traffic.
 This is intended:
-validator operators are best placed to decide
-whether running their validator is worth its cost.
+validator operators are best placed to decide which preapprovals to provide
+value and how long they should remain valid.
 
 ### Alternatives Considered
 
@@ -165,13 +175,13 @@ whether running their validator is worth its cost.
   Rejected, as it gives the ecosystem no time to adjust.
 - **Lower the burst amount instead of the refill rate.**
   Rejected, as validators with no traffic left could no longer buy more.
-- **Keep a small permanent free traffic allocation.**
-  Rejected, as any free allocation remains a target for farming
-  and its cost grows with the number of validators.
 - **Have validators pay for ACS commitments.**
   Rejected, as their cost grows with network size
   and would make running a well-connected validator expensive
   for traffic that is required by the protocol.
+- **Keep a small permanent free traffic allocation.**
+  Rejected, as any free allocation remains a target for farming
+  and it would still not scale to the actual cost of ACS commitments.
 
 ## Backwards compatibility
 
@@ -189,8 +199,9 @@ We recommend that validator operators:
 
 ## Reference Implementation
 
-TODO: link the Canton change for free rate-limited ACS commitments.
 The removal of free traffic is enacted via SV votes on `AmuletConfig`.
+
+The change to make ACS commitments free and rate-limited is implemented in Canton and does not require any Daml changes.
 
 ## Copyright
 
