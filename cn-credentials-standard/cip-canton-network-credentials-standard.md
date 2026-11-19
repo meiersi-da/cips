@@ -216,7 +216,7 @@ Credential registries SHOULD serve the read-only Credential Registry Query API. 
 
 The lookup and snapshot endpoints evaluate queries at a vector clock `synchronizerTimes` of `(synchronizerId, recordTime)` pairs, and report the one they used.
 Records on synchronizers not in `synchronizerTimes` are not returned. Without `synchronizerTimes`, the latest processed times of all synchronizers are used.
-Clients can thereby read the same state from several backends of a registry and compare the results.
+Clients can thereby implement BFT reads from decentralized registries by querying f + 1 registry backends and comparing the results for JSON equality.
 
 ##### Credential Registry Info API
 
@@ -240,7 +240,7 @@ This is all that is needed for the lookups in [Standardized Application and Meta
 
 By default the API only returns the `CredentialView` of a credential. It optionally also includes the underlying contract so that it can be disclosed for usage in a Daml transaction that reads the credential.
 
-It also looks up a single record by contract id, and reports whether that record is active or archived.
+The API also supports looking up a single active record by contract id.
 
 ###### Handling Duplicates
 
@@ -308,7 +308,6 @@ or its issuer or holder can extend it on their own, optionally by burning CC, as
 
 The registry supports extending the expiration of an existing record by burning CC.
 The default fee is `1.0 USD/year` (configurable by SV voting).
-Networks started before the registry existed enable the registry by SV voting.
 An extension archives the record and creates a replacement with the same claims, the same `createdAt`, and a new `expiresAt`.
 
 The holder or issuer can request such an extension on their own, as the extension does not change the claims of the credential.
@@ -387,7 +386,7 @@ It is published by `registryAdmin` using a self-published credential (issuer = h
 It specifies a comma-separated list of URL prefixes for party `registryAdmin`. Clients append the paths of the credential registry OpenAPI specs to them, as for the CIP-0056 registry URLs.
 Multiple URLs are supported for decentralized registries, so that clients can implement BFT reads.
 Data that clients use in a Daml transaction, such as disclosed credential contracts and choice contexts, can be fetched from any one URL, as the transaction validates it on-ledger; clients retry with another URL if the submission fails, as described in [CIP-0056](../cip-0056/cip-0056.md#off-ledger-api-discovery-and-access).
-Data that is only used off-ledger, such as lookup results used for discovery, is fetched from more than a third of the URLs with the same `synchronizerTimes`, and accepted only if all responses are equal.
+Data that is only used off-ledger, such as lookup results used for discovery, is fetched from more than a third of the URLs, and accepted only if all responses are equal when compared as JSON.
 
 #### Discovering Credential Issuer Applications
 
