@@ -291,7 +291,7 @@ They ingest credentials through the [Bulk Credential Retrieval API](#bulk-creden
 
 #### Credential Registry Publication API
 
-The purpose of the Credential Registry Publication API is to enable credential issuers and holders to *jointly* create, update, and archive credentials in a third-party credential registry. Each credential registry MUST document whose authorization it requires to create a credential, and SHOULD require the authorization of both issuer and holder. The Canton Credential Registry requires both, and also the paying party when it charges a fee. The specific workflows for obtaining this authorization and determining the claims of the credential are provided by the issuer and implemented in their credential issuance app.
+The purpose of the Credential Registry Publication API is to enable credential issuers and holders to *jointly* create, update, and archive credentials in a third-party credential registry. Each credential registry MUST document whose authorization it requires to create a credential, and SHOULD require the authorization of both issuer and holder. The Canton Credential Registry requires both, and also the payer when the update names one. The specific workflows for obtaining this authorization and determining the claims of the credential are provided by the issuer and implemented in their credential issuance app.
 
 Implementing this API is optional for credential registries. They MAY decide to only support registry-internal workflows for creating credentials, and not offer third-party issuers the right to publish credentials to that registry.
 
